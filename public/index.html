@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OceanWatch — Мониторинг экологического состояния Мирового океана</title>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500;600&family=Playfair+Display:wght@700;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+
+  <!-- ═══════════ HEADER / NAV ═══════════ -->
+  <header class="site-header">
+    <div class="header-inner">
+      <div class="logo-block">
+        <div class="logo-icon">
+          <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="20" cy="20" r="18" stroke="#2a9d8f" stroke-width="2"/>
+            <path d="M4 20 Q10 14 16 20 Q22 26 28 20 Q34 14 36 20" stroke="#2a9d8f" stroke-width="2" fill="none"/>
+            <path d="M2 26 Q8 20 14 26 Q20 32 26 26 Q32 20 38 26" stroke="#264653" stroke-width="1.5" fill="none"/>
+            <circle cx="20" cy="10" r="2" fill="#e9c46a"/>
+          </svg>
+        </div>
+        <div>
+          <span class="logo-text">OCEAN<strong>WATCH</strong></span>
+          <span class="logo-sub">Глобальная система мониторинга</span>
+        </div>
+      </div>
+      <nav class="main-nav">
+        <a href="#overview" class="nav-link active" data-section="overview">Обзор</a>
+        <a href="#pollution" class="nav-link" data-section="pollution">Загрязнение</a>
+        <a href="#temperature" class="nav-link" data-section="temperature">Температура</a>
+        <a href="#acidification" class="nav-link" data-section="acidification">Закисление</a>
+        <a href="#biodiversity" class="nav-link" data-section="biodiversity">Биоразнообразие</a>
+        <a href="#map" class="nav-link" data-section="map">Карта</a>
+      </nav>
+      <div class="header-controls">
+        <div class="status-indicator">
+          <span class="pulse-dot"></span>
+          <span class="status-text">Live Data</span>
+        </div>
+        <button class="btn-admin" id="adminBtn" title="Панель администратора">
+          <i class="fas fa-lock"></i> Войти
+        </button>
+        <button class="btn-refresh" id="refreshBtn" title="Обновить данные">
+          <i class="fas fa-sync-alt"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ═══════════ HERO TICKER ═══════════ -->
+  <div class="data-ticker">
+    <div class="ticker-label"><i class="fas fa-satellite-dish"></i> МОНИТОРИНГ</div>
+    <div class="ticker-track">
+      <div class="ticker-items" id="tickerItems">
+        <span>🌡️ Температура поверхности океана: +0.97°C к норме XX века</span>
+        <span>🧪 pH океана: 8.05 (снижение на 30% с доиндустриальной эпохи)</span>
+        <span>♻️ Пластик в океанах: 170+ трлн частиц</span>
+        <span>💀 Мёртвые зоны: ~500 по всему миру</span>
+        <span>🐠 Обесцвечивание кораллов: 75% мировых рифов поражено</span>
+        <span>⬇️ Кислород в океане: -2% с 1960-х годов</span>
+        <span>📈 Пластик попадает в океан: 8–14 млн тонн ежегодно</span>
+        <span>🌊 Уровень моря: +9 см за 30 лет, темп удвоился</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════ MAIN ═══════════ -->
+  <main>
+
+    <!-- SECTION: OVERVIEW -->
+    <section id="overview" class="section active">
+
+      <!-- ── Hero Banner ── -->
+      <div class="overview-hero">
+        <div class="hero-left">
+          <div class="section-label"><i class="fas fa-globe-asia"></i> СВОДНЫЙ ДАШБОРД</div>
+          <h2 class="section-title">Экологическое состояние<br>Мирового океана</h2>
+          <p class="section-desc">Данные основаны на материалах ЮНЕСКО, NOAA, NCEI и ведущих рецензируемых научных изданий (2024–2025)</p>
+          <div class="hero-badges">
+            <span class="hero-badge critical"><i class="fas fa-exclamation-triangle"></i> Критическое состояние</span>
+            <span class="hero-badge info"><i class="fas fa-sync-alt"></i> Данные обновлены 2024–2025</span>
+          </div>
+        </div>
+        <div class="hero-right">
+          <div class="hero-ring-stat">
+            <svg viewBox="0 0 120 120" class="ring-svg">
+              <circle cx="60" cy="60" r="50" stroke="rgba(42,157,143,0.12)" stroke-width="10" fill="none"/>
+              <circle cx="60" cy="60" r="50" stroke="url(#ringGrad)" stroke-width="10" fill="none"
+                stroke-dasharray="314" stroke-dashoffset="47" stroke-linecap="round"
+                transform="rotate(-90 60 60)"/>
+              <defs>
+                <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" stop-color="#2a9d8f"/>
+                  <stop offset="100%" stop-color="#e63946"/>
+                </linearGradient>
+              </defs>
+            </svg>
+            <div class="ring-inner">
+              <span class="ring-val">85%</span>
+              <span class="ring-lbl">угроза<br>экосисте-мам</span>
+            </div>
+          </div>
+          <div class="hero-side-stats">
+            <div class="hss-item">
+              <span class="hss-n critical">+0.97°C</span>
+              <span class="hss-l">аномалия SST</span>
+            </div>
+            <div class="hss-item">
+              <span class="hss-n danger">170 трлн</span>
+              <span class="hss-l">частиц пластика</span>
+            </div>
+            <div class="hss-item">
+              <span class="hss-n warning">pH 8.05</span>
+              <span class="hss-l">закисление −30%</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── KPI Strip ── -->
+      <div class="kpi-strip">
+        <div class="kpi-strip-item critical">
+          <div class="ksi-icon"><i class="fas fa-thermometer-three-quarters"></i></div>
+          <div class="ksi-body">
+            <div class="ksi-val" data-target="0.97" data-suffix="°C">0</div>
+            <div class="ksi-lbl">Аномалия температуры</div>
+            <div class="ksi-sub"><i class="fas fa-arrow-up"></i> Рекорд 2024</div>
+          </div>
+        </div>
+        <div class="kpi-strip-div"></div>
+        <div class="kpi-strip-item danger">
+          <div class="ksi-icon"><i class="fas fa-flask"></i></div>
+          <div class="ksi-body">
+            <div class="ksi-val" data-target="30" data-suffix="%">0</div>
+            <div class="ksi-lbl">Рост кислотности</div>
+            <div class="ksi-sub"><i class="fas fa-arrow-up"></i> pH: 8.19→8.05</div>
+          </div>
+        </div>
+        <div class="kpi-strip-div"></div>
+        <div class="kpi-strip-item warning">
+          <div class="ksi-icon"><i class="fas fa-recycle"></i></div>
+          <div class="ksi-body">
+            <div class="ksi-val" data-target="170" data-suffix="трлн">0</div>
+            <div class="ksi-lbl">Пластиковых частиц</div>
+            <div class="ksi-sub"><i class="fas fa-arrow-up"></i> +14 млн т/год</div>
+          </div>
+        </div>
+        <div class="kpi-strip-div"></div>
+        <div class="kpi-strip-item moderate">
+          <div class="ksi-icon"><i class="fas fa-skull-crossbones"></i></div>
+          <div class="ksi-body">
+            <div class="ksi-val" data-target="500" data-suffix="">0</div>
+            <div class="ksi-lbl">Мёртвых зон</div>
+            <div class="ksi-sub"><i class="fas fa-arrow-up"></i> С 1960-х</div>
+          </div>
+        </div>
+        <div class="kpi-strip-div"></div>
+        <div class="kpi-strip-item danger">
+          <div class="ksi-icon"><i class="fas fa-water"></i></div>
+          <div class="ksi-body">
+            <div class="ksi-val" data-target="90" data-suffix="%">0</div>
+            <div class="ksi-lbl">Тепла поглощает океан</div>
+            <div class="ksi-sub"><i class="fas fa-arrow-up"></i> Рекорд 65 лет</div>
+          </div>
+        </div>
+        <div class="kpi-strip-div"></div>
+        <div class="kpi-strip-item critical">
+          <div class="ksi-icon"><i class="fas fa-fish"></i></div>
+          <div class="ksi-body">
+            <div class="ksi-val" data-target="75" data-suffix="%">0</div>
+            <div class="ksi-lbl">Кораллов поражено</div>
+            <div class="ksi-sub"><i class="fas fa-arrow-up"></i> Масс. обесцвечивание</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Charts ── -->
+      <div class="overview-charts-layout">
+        <!-- Big chart left -->
+        <div class="chart-card overview-chart-main">
+          <div class="chart-header">
+            <div>
+              <h3 class="chart-title">Динамика пластикового загрязнения поверхности океана</h3>
+              <p class="chart-source">Источник: PLOS ONE, Eriksen et al. / NOAA NCEI (1979–2024)</p>
+            </div>
+            <div class="chart-badge critical">Критично</div>
+          </div>
+          <canvas id="plasticTrendChart" height="220"></canvas>
+        </div>
+        <!-- Right col: donut + alert block -->
+        <div class="overview-chart-side">
+          <div class="chart-card">
+            <div class="chart-header">
+              <h3 class="chart-title">Источники пластика в океане</h3>
+              <p class="chart-source">Источник: ЮНЕСКО / ЮНЕП 2024</p>
+            </div>
+            <canvas id="plasticSourceChart" height="200"></canvas>
+          </div>
+          <div class="overview-alert-card">
+            <div class="oac-icon"><i class="fas fa-bell"></i></div>
+            <div class="oac-body">
+              <div class="oac-title">Текущий статус угрозы</div>
+              <div class="oac-items">
+                <div class="oac-row"><span class="oac-dot critical"></span><span>Температура — Критично</span></div>
+                <div class="oac-row"><span class="oac-dot danger"></span><span>Пластик — Опасно</span></div>
+                <div class="oac-row"><span class="oac-dot danger"></span><span>Закисление — Опасно</span></div>
+                <div class="oac-row"><span class="oac-dot warning"></span><span>Биоразнообразие — Угроза</span></div>
+                <div class="oac-row"><span class="oac-dot warning"></span><span>Кислород — Снижение</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION: POLLUTION -->
+    <section id="pollution" class="section">
+      <div class="section-header">
+        <div class="section-label"><i class="fas fa-industry"></i> ЗАГРЯЗНЕНИЕ</div>
+        <h2 class="section-title">Антропогенное загрязнение<br>морской среды</h2>
+        <p class="section-desc">Пластик, нефтяные разливы, нутриентное загрязнение и мёртвые зоны</p>
+      </div>
+
+      <div class="pollution-stats-grid">
+        <div class="stat-card">
+          <div class="stat-icon"><i class="fas fa-globe-americas"></i></div>
+          <div class="stat-content">
+            <div class="stat-num">75–199</div>
+            <div class="stat-unit">млн тонн</div>
+            <div class="stat-desc">пластика накоплено в океанах</div>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon"><i class="fas fa-trash"></i></div>
+          <div class="stat-content">
+            <div class="stat-num">1,9 млн</div>
+            <div class="stat-unit">фрагментов/м²</div>
+            <div class="stat-desc">средняя концентрация пластика</div>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon"><i class="fas fa-map-marked-alt"></i></div>
+          <div class="stat-content">
+            <div class="stat-num">1,6 млн</div>
+            <div class="stat-unit">км²</div>
+            <div class="stat-desc">площадь Большого Тихоокеанского мусорного пятна</div>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon"><i class="fas fa-fish"></i></div>
+          <div class="stat-content">
+            <div class="stat-num">60%</div>
+            <div class="stat-unit">рыб</div>
+            <div class="stat-desc">содержат микропластик</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="charts-row">
+        <div class="chart-card">
+          <div class="chart-header">
+            <h3 class="chart-title">Ежегодный приток пластика в океан</h3>
+            <p class="chart-source">Источник: IUCN, Our World in Data 2024</p>
+          </div>
+          <canvas id="plasticInflowChart" height="260"></canvas>
+        </div>
+        <div class="chart-card">
+          <div class="chart-header">
+            <h3 class="chart-title">Распределение мёртвых зон по регионам</h3>
+            <p class="chart-source">Источник: UNESCO IOC State of Ocean 2024</p>
+          </div>
+          <canvas id="deadZonesChart" height="260"></canvas>
+        </div>
+        <div class="chart-card">
+          <div class="chart-header">
+            <h3 class="chart-title">Региональный вклад в загрязнение</h3>
+            <p class="chart-source">Источник: ЮНЕП / GreenMatch 2024</p>
+          </div>
+          <canvas id="regionalPollutionChart" height="260"></canvas>
+        </div>
+      </div>
+
+      <!-- Garbage patches -->
+      <div class="garbage-patches-section">
+        <h3 class="subsection-title"><i class="fas fa-satellite"></i> Основные мусорные пятна Мирового океана</h3>
+        <div class="patches-grid">
+          <div class="patch-card">
+            <div class="patch-header">
+              <span class="patch-badge critical">Критично</span>
+              <span class="patch-ocean">Тихий океан</span>
+            </div>
+            <h4>Большое Тихоокеанское мусорное пятно</h4>
+            <div class="patch-stats">
+              <span><i class="fas fa-expand-arrows-alt"></i> ~1,6 млн км²</span>
+              <span><i class="fas fa-weight-hanging"></i> 1,8 трлн частиц</span>
+              <span><i class="fas fa-ruler-combined"></i> 2× площадь Техаса</span>
+            </div>
+            <div class="patch-bar"><div class="patch-fill" style="width:95%"></div></div>
+          </div>
+          <div class="patch-card">
+            <div class="patch-header">
+              <span class="patch-badge danger">Высокая угроза</span>
+              <span class="patch-ocean">Атлантический океан</span>
+            </div>
+            <h4>Северо-Атлантическое мусорное пятно</h4>
+            <div class="patch-stats">
+              <span><i class="fas fa-expand-arrows-alt"></i> ~700 тыс. км²</span>
+              <span><i class="fas fa-weight-hanging"></i> 7000 мкропластика/м³</span>
+              <span><i class="fas fa-ruler-combined"></i> Глубина до 200 м</span>
+            </div>
+            <div class="patch-bar"><div class="patch-fill" style="width:65%"></div></div>
+          </div>
+          <div class="patch-card">
+            <div class="patch-header">
+              <span class="patch-badge warning">Умеренная угроза</span>
+              <span class="patch-ocean">Индийский океан</span>
+            </div>
+            <h4>Индийского Океана мусорное пятно</h4>
+            <div class="patch-stats">
+              <span><i class="fas fa-expand-arrows-alt"></i> ~500 тыс. км²</span>
+              <span><i class="fas fa-weight-hanging"></i> Данные уточняются</span>
+              <span><i class="fas fa-ruler-combined"></i> Активно изучается</span>
+            </div>
+            <div class="patch-bar"><div class="patch-fill" style="width:45%"></div></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION: TEMPERATURE -->
+    <section id="temperature" class="section">
+      <div class="section-header">
+        <div class="section-label"><i class="fas fa-thermometer-half"></i> ТЕМПЕРАТУРА</div>
+        <h2 class="section-title">Тепловое состояние<br>Мирового океана</h2>
+        <p class="section-desc">Данные о температуре поверхности, тепловом содержании и морских тепловых волнах</p>
+      </div>
+
+      <div class="temp-hero-stats">
+        <div class="temp-stat">
+          <div class="temp-val critical">+0.97°C</div>
+          <div class="temp-label">Аномалия SST 2024<br><small>относительно среднего XX века</small></div>
+        </div>
+        <div class="temp-divider"></div>
+        <div class="temp-stat">
+          <div class="temp-val danger">×2</div>
+          <div class="temp-label">Скорость нагрева<br><small>удвоилась за 20 лет (UNESCO 2024)</small></div>
+        </div>
+        <div class="temp-divider"></div>
+        <div class="temp-stat">
+          <div class="temp-val danger">90%</div>
+          <div class="temp-label">Избыточного тепла<br><small>поглощает океан</small></div>
+        </div>
+        <div class="temp-divider"></div>
+        <div class="temp-stat">
+          <div class="temp-val warning">+9 см</div>
+          <div class="temp-label">Подъём уровня моря<br><small>за последние 30 лет</small></div>
+        </div>
+      </div>
+
+      <div class="charts-row">
+        <div class="chart-card wide">
+          <div class="chart-header">
+            <div>
+              <h3 class="chart-title">Аномалии температуры поверхности океана (1970–2024)</h3>
+              <p class="chart-source">Источник: NOAA NCEI / WMO State of Global Climate 2024</p>
+            </div>
+            <div class="chart-badge critical">Рекордный год</div>
+          </div>
+          <canvas id="sstAnomalyChart" height="200"></canvas>
+        </div>
+      </div>
+
+      <div class="charts-row">
+        <div class="chart-card">
+          <div class="chart-header">
+            <h3 class="chart-title">Тепловое содержание океана (0–2000 м)</h3>
+            <p class="chart-source">Источник: WMO / IPCC 2024</p>
+          </div>
+          <canvas id="oceanHeatChart" height="260"></canvas>
+        </div>
+        <div class="chart-card">
+          <div class="chart-header">
+            <h3 class="chart-title">Нагрев по регионам (выше нормы на 2°C+)</h3>
+            <p class="chart-source">Источник: UNESCO State of Ocean 2024</p>
+          </div>
+          <canvas id="regionalTempChart" height="260"></canvas>
+        </div>
+        <div class="chart-card">
+          <div class="chart-header">
+            <h3 class="chart-title">Подъём уровня моря (мм/год)</h3>
+            <p class="chart-source">Источник: Copernicus / ESA 1993–2024</p>
+          </div>
+          <canvas id="seaLevelChart" height="260"></canvas>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION: ACIDIFICATION -->
+    <section id="acidification" class="section">
+      <div class="section-header">
+        <div class="section-label"><i class="fas fa-vial"></i> ЗАКИСЛЕНИЕ</div>
+        <h2 class="section-title">Закисление Мирового океана<br>«Злой близнец» изменения климата</h2>
+        <p class="section-desc">Снижение pH как результат поглощения CO₂. Источник: UNESCO IOC 2024, NOAA</p>
+      </div>
+
+      <div class="acid-timeline">
+        <div class="acid-point">
+          <div class="acid-year">1750</div>
+          <div class="acid-ph ph-pre">pH 8.19</div>
+          <div class="acid-label">До промышленной революции</div>
+        </div>
+        <div class="acid-arrow"><i class="fas fa-long-arrow-alt-right"></i><span>−0.14 ед.</span></div>
+        <div class="acid-point current">
+          <div class="acid-year">2024</div>
+          <div class="acid-ph ph-now">pH 8.05</div>
+          <div class="acid-label">Сегодня (−30% кислотность)</div>
+        </div>
+        <div class="acid-arrow danger"><i class="fas fa-long-arrow-alt-right"></i><span>прогноз</span></div>
+        <div class="acid-point future">
+          <div class="acid-year">2100</div>
+          <div class="acid-ph ph-future">pH ~7.85</div>
+          <div class="acid-label">Прогноз без вмешательства (+170%)</div>
+        </div>
+      </div>
+
+      <div class="charts-row">
+        <div class="chart-card wide">
+          <div class="chart-header">
+            <div>
+              <h3 class="chart-title">Изменение pH поверхности океана и CO₂ атмосферы (1960–2024)</h3>
+              <p class="chart-source">Источник: NOAA Mauna Loa / Frontiers in Marine Science 2024</p>
+            </div>
+            <div class="chart-badge danger">Критический тренд</div>
+          </div>
+          <canvas id="phCo2Chart" height="200"></canvas>
+        </div>
+      </div>
+
+      <div class="charts-row">
+        <div class="chart-card">
+          <div class="chart-header">
+            <h3 class="chart-title">Воздействие на морские организмы</h3>
+            <p class="chart-source">Источник: IUCN / IPCC</p>
+          </div>
+          <canvas id="acidImpactChart" height="260"></canvas>
+        </div>
+        <div class="chart-card">
+          <div class="chart-header">
+            <h3 class="chart-title">CO₂ в атмосфере (ppm)</h3>
+            <p class="chart-source">Источник: NOAA Mauna Loa Observatory 2024</p>
+          </div>
+          <canvas id="co2Chart" height="260"></canvas>
+        </div>
+        <div class="chart-card">
+          <div class="chart-header">
+            <h3 class="chart-title">Кислород в океане: потеря с 1960-х</h3>
+            <p class="chart-source">Источник: UNESCO IOC 2024</p>
+          </div>
+          <canvas id="oxygenChart" height="260"></canvas>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION: BIODIVERSITY -->
+    <section id="biodiversity" class="section">
+      <div class="section-header">
+        <div class="section-label"><i class="fas fa-leaf"></i> БИОРАЗНООБРАЗИЕ</div>
+        <h2 class="section-title">Состояние морских экосистем<br>и биоразнообразия</h2>
+        <p class="section-desc">Коралловые рифы, морские виды под угрозой и экосистемные услуги</p>
+      </div>
+
+      <div class="charts-row">
+        <div class="chart-card">
+          <div class="chart-header">
+            <h3 class="chart-title">Состояние коралловых рифов мира</h3>
+            <p class="chart-source">Источник: NOAA / GCRMN 2024</p>
+          </div>
+          <canvas id="coralChart" height="260"></canvas>
+        </div>
+        <div class="chart-card">
+          <div class="chart-header">
+            <h3 class="chart-title">Угрозы морскому биоразнообразию</h3>
+            <p class="chart-source">Источник: IUCN Red List / UNESCO 2024</p>
+          </div>
+          <canvas id="threatsChart" height="260"></canvas>
+        </div>
+        <div class="chart-card">
+          <div class="chart-header">
+            <h3 class="chart-title">Численность рыбных запасов (1970=100%)</h3>
+            <p class="chart-source">Источник: FAO State of World Fisheries 2024</p>
+          </div>
+          <canvas id="fishStockChart" height="260"></canvas>
+        </div>
+      </div>
+
+      <div class="bio-info-grid">
+        <div class="bio-card">
+          <div class="bio-icon critical"><i class="fas fa-coral"></i></div>
+          <h4>Коралловые рифы</h4>
+          <p>75% мировых рифов пострадали от обесцвечивания в 2024 году. Идёт крупнейшее в истории массовое обесцвечивание, охватившее десятки стран.</p>
+          <div class="bio-tag critical">Критическое состояние</div>
+        </div>
+        <div class="bio-card">
+          <div class="bio-icon danger"><i class="fas fa-hippo"></i></div>
+          <h4>Морские млекопитающие</h4>
+          <p>72% видов, включённых в Красный список МСОП, обитают в морских охраняемых районах. Браконьерство и загрязнение продолжают угрожать популяциям.</p>
+          <div class="bio-tag danger">Высокий риск</div>
+        </div>
+        <div class="bio-card">
+          <div class="bio-icon warning"><i class="fas fa-seedling"></i></div>
+          <h4>Морские леса</h4>
+          <p>Мангровые леса, морские травы и водоросли поглощают в 5 раз больше углерода, чем леса на суше. 60% стран не включили их защиту в климатические планы.</p>
+          <div class="bio-tag warning">Недооценённая угроза</div>
+        </div>
+        <div class="bio-card">
+          <div class="bio-icon moderate"><i class="fas fa-fish"></i></div>
+          <h4>Рыбные запасы</h4>
+          <p>Более 3 млрд человек зависят от океана как источника пищи. 60% рыб содержат микропластик. Промысловые запасы сокращаются из-за перелова и загрязнения.</p>
+          <div class="bio-tag moderate">Под давлением</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION: MAP -->
+    <section id="map" class="section">
+      <div class="section-header">
+        <div class="section-label"><i class="fas fa-map"></i> ИНТЕРАКТИВНАЯ КАРТА</div>
+        <h2 class="section-title">Карта экологических угроз<br>Мирового океана</h2>
+        <p class="section-desc">Визуализация ключевых зон экологического стресса</p>
+      </div>
+
+      <div class="map-controls">
+        <button class="map-btn active" data-layer="plastic">🗑️ Мусорные пятна</button>
+        <button class="map-btn" data-layer="deadzones">💀 Мёртвые зоны</button>
+        <button class="map-btn" data-layer="temp">🌡️ Температурные аномалии</button>
+        <button class="map-btn" data-layer="coral">🪸 Состояние рифов</button>
+      </div>
+
+      <div class="map-container" id="mapContainer">
+        <canvas id="oceanMapCanvas"></canvas>
+        <div class="map-legend" id="mapLegend">
+          <div class="legend-title">Легенда</div>
+          <div class="legend-item"><span class="legend-dot critical"></span>Критическое</div>
+          <div class="legend-item"><span class="legend-dot danger"></span>Высокая угроза</div>
+          <div class="legend-item"><span class="legend-dot warning"></span>Умеренная</div>
+          <div class="legend-item"><span class="legend-dot moderate"></span>Наблюдение</div>
+        </div>
+        <div class="map-tooltip" id="mapTooltip"></div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ═══════════ FOOTER ═══════════ -->
+  <footer class="site-footer">
+    <div class="footer-inner">
+      <div class="footer-logo">
+        <span class="logo-text">OCEAN<strong>WATCH</strong></span>
+        <p>Информационная система для интерактивного мониторинга и визуализации экологического состояния Мирового океана</p>
+      </div>
+      <div class="footer-sources">
+        <h4>Источники данных</h4>
+        <ul>
+          <li><a href="https://www.ioc.unesco.org" target="_blank">UNESCO IOC — State of the Ocean 2024</a></li>
+          <li><a href="https://www.noaa.gov" target="_blank">NOAA — National Oceanic and Atmospheric Administration</a></li>
+          <li><a href="https://www.ncei.noaa.gov/products/microplastics" target="_blank">NCEI — Marine Microplastics Database</a></li>
+          <li><a href="https://ourworldindata.org/plastic-pollution" target="_blank">Our World in Data — Plastic Pollution</a></li>
+          <li><a href="https://journals.plos.org/plosone/" target="_blank">PLOS ONE — Eriksen et al. 2023</a></li>
+        </ul>
+      </div>
+      <div class="footer-meta">
+        <div class="meta-item"><i class="fas fa-calendar"></i> Последнее обновление: <span id="lastUpdate"></span></div>
+        <div class="meta-item"><i class="fas fa-database"></i> Данные: публичные открытые источники</div>
+        <div class="meta-item"><i class="fas fa-graduation-cap"></i> Научно-информационный проект</div>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>© 2026 OceanWatch — Глобальный мониторинг океана</span>
+      <span>Данные предоставлены в образовательных целях</span>
+    </div>
+  </footer>
+
+  <script src="script.js"></script>
+
+  <!-- ═══════════ ADMIN LOGIN MODAL ═══════════ -->
+  <div class="modal-overlay" id="adminLoginModal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <div class="modal-icon"><i class="fas fa-shield-alt"></i></div>
+        <div>
+          <h3 class="modal-title">Панель администратора</h3>
+          <p class="modal-sub">Введите учётные данные для доступа</p>
+        </div>
+        <button class="modal-close" id="loginClose"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">Логин</label>
+          <input type="text" class="form-input" id="adminLogin" placeholder="admin" autocomplete="off"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Пароль</label>
+          <div class="input-wrap">
+            <input type="password" class="form-input" id="adminPass" placeholder="••••••••"/>
+            <button class="input-eye" id="togglePass"><i class="fas fa-eye"></i></button>
+          </div>
+        </div>
+        <div class="form-error" id="loginError"></div>
+        <button class="btn-primary" id="loginSubmit">
+          <i class="fas fa-sign-in-alt"></i> Войти в систему
+        </button>
+        <p class="login-hint">Демо: login <code>admin</code> / pass <code>ocean2024</code></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════ ADMIN PANEL ═══════════ -->
+  <div class="admin-panel" id="adminPanel">
+    <div class="adm-header">
+      <div class="adm-title">
+        <i class="fas fa-cogs"></i>
+        <span>Панель управления данными</span>
+        <span class="adm-badge">ADMIN</span>
+      </div>
+      <div class="adm-header-actions">
+        <button class="adm-btn-save" id="saveAllBtn"><i class="fas fa-save"></i> Сохранить всё</button>
+        <button class="adm-btn-logout" id="logoutBtn"><i class="fas fa-sign-out-alt"></i> Выйти</button>
+      </div>
+    </div>
+
+    <div class="adm-tabs">
+      <button class="adm-tab active" data-adm="kpi">📊 KPI-показатели</button>
+      <button class="adm-tab" data-adm="ticker">📡 Строка данных</button>
+      <button class="adm-tab" data-adm="map">🗺️ Точки карты</button>
+      <button class="adm-tab" data-adm="alerts">🔔 Статусы угроз</button>
+    </div>
+
+    <!-- TAB: KPI -->
+    <div class="adm-pane active" id="adm-kpi">
+      <p class="adm-pane-desc">Редактирование ключевых показателей на главной странице</p>
+      <div class="adm-kpi-grid" id="admKpiGrid">
+        <!-- Populated by JS -->
+      </div>
+    </div>
+
+    <!-- TAB: TICKER -->
+    <div class="adm-pane" id="adm-ticker">
+      <p class="adm-pane-desc">Строка бегущих данных в верхней части сайта</p>
+      <div class="adm-ticker-list" id="admTickerList">
+        <!-- Populated by JS -->
+      </div>
+      <button class="adm-add-btn" id="addTickerItem"><i class="fas fa-plus"></i> Добавить строку</button>
+    </div>
+
+    <!-- TAB: MAP POINTS -->
+    <div class="adm-pane" id="adm-map">
+      <p class="adm-pane-desc">Редактирование точек на карте экологических угроз</p>
+      <div class="adm-map-layer-sel">
+        <label class="form-label">Слой карты:</label>
+        <select class="form-select" id="admMapLayer">
+          <option value="plastic">🗑️ Мусорные пятна</option>
+          <option value="deadzones">💀 Мёртвые зоны</option>
+          <option value="temp">🌡️ Температурные аномалии</option>
+          <option value="coral">🪸 Состояние рифов</option>
+        </select>
+      </div>
+      <div class="adm-map-points" id="admMapPoints">
+        <!-- Populated by JS -->
+      </div>
+      <button class="adm-add-btn" id="addMapPoint"><i class="fas fa-plus"></i> Добавить точку</button>
+    </div>
+
+    <!-- TAB: ALERTS -->
+    <div class="adm-pane" id="adm-alerts">
+      <p class="adm-pane-desc">Статусы угроз в блоке «Текущий статус» на главной</p>
+      <div class="adm-alerts-list" id="admAlertsList">
+        <!-- Populated by JS -->
+      </div>
+    </div>
+
+    <div class="adm-footer">
+      <i class="fas fa-info-circle"></i> Изменения применяются немедленно на сайте. Для постоянного сохранения нажмите «Сохранить всё».
+    </div>
+  </div>
+
+  <!-- Save notification -->
+  <div class="save-toast" id="saveToast"><i class="fas fa-check-circle"></i> Данные сохранены</div>
+
+</body>
+</html>
