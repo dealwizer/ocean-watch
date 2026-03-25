@@ -34,8 +34,479 @@ const COLORS = {
 };
 
 /* ══════════════════════════════════════════════════
-   1. NAVIGATION
+   REAL DATA API LAYER  v2.0
+   ══════════════════════════════════════════════════
+   1. NOAA GML       — CO₂ Mauna Loa (no key)
+   2. Open-Meteo Marine — SST + wave height (no key)
+   3. Open-Meteo Air Quality — PM2.5, O₃, NO₂ (no key)
+   4. Open-Meteo Forecast — wind speed, humidity (no key)
+   5. World Bank     — CO₂ emissions (no key)
+   6. NASA POWER     — surface climate (no key)
+   7. Open-Meteo UV  — UV index over ocean (no key)
+   8. wttr.in        — weather summary (no key)
    ══════════════════════════════════════════════════ */
+
+window.OCEANWATCH_KEYS = window.OCEANWATCH_KEYS || { openweather: '' };
+
+const LIVE = {
+  co2_current: null, co2_monthly: [],
+  sst_pacific: null, sst_atlantic: null, sst_indian: null,
+  sst_arctic: null,  sst_southern: null,
+  wave_pacific: null, wave_atlantic: null, wave_indian: null,
+  wave_arctic: null,  wave_southern: null,
+  wind_speed: null, wind_dir: null, humidity: null,
+  uv_index: null,
+  air_pollution: {},
+  sea_level_rise: null,
+  loaded: {},
+};
+
+const PROXY = 'https://api.allorigins.win/raw?url=';
+
+/* ── Animated counter for live numbers ────────────
+   animateLiveValue(el, from, to, decimals, suffix, duration)
+   Counts from→to with easing, updating el.textContent
+   ──────────────────────────────────────────────── */
+function animateLiveValue(el, from, to, decimals = 1, suffix = '', duration = 1200) {
+  if (!el) return;
+  const start = performance.now();
+  const diff  = to - from;
+
+  function step(now) {
+    const elapsed = now - start;
+    const progress = Math.min(elapsed / duration, 1);
+    // Ease-out cubic
+    const eased = 1 - Math.pow(1 - progress, 3);
+    const current = from + diff * eased;
+    el.textContent = current.toFixed(decimals) + suffix;
+    if (progress < 1) requestAnimationFrame(step);
+    else el.textContent = to.toFixed(decimals) + suffix;
+  }
+  requestAnimationFrame(step);
+}
+
+/* ────────────────────────────────────────────────
+   1. NOAA GML — CO₂ Monthly (Mauna Loa)
+   ──────────────────────────────────────────────── */
+async function fetchCO2Data() {
+  try {
+    const url = encodeURIComponent('https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_mm_mlo.txt');
+    const res = await fetch(PROXY + url);
+    if (!res.ok) throw new Error('CO2 fetch failed');
+    const text = await res.text();
+    const lines = text.split('\n').filter(l => l.trim() && !l.startsWith('#'));
+    const parsed = lines.map(l => {
+      const parts = l.trim().split(/\s+/);
+      return { year: +parts[0], month: +parts[1], value: +parts[3] };
+    }).filter(d => d.value > 0 && d.year >= 1960);
+    LIVE.co2_monthly = parsed;
+    if (parsed.length > 0) LIVE.co2_current = parsed[parsed.length - 1].value;
+    LIVE.loaded.co2 = true;
+    updateCO2Displays();
+    console.log(`%c✓ CO₂ loaded: ${LIVE.co2_current} ppm (NOAA GML)`, 'color:#2a9d8f');
+    return parsed;
+  } catch (e) {
+    console.warn('CO₂ API unavailable:', e.message);
+    LIVE.loaded.co2 = false;
+    return null;
+  }
+}
+
+/* ────────────────────────────────────────────────
+   2. Open-Meteo Marine API — SST + wave height
+      + wind direction, swell period
+   ──────────────────────────────────────────────── */
+const OCEAN_POINTS = {
+  pacific:  { lat:  5.0, lon: -150.0, name: 'Тихий океан' },
+  atlantic: { lat: 20.0, lon:  -40.0, name: 'Атлантический океан' },
+  indian:   { lat: -15.0, lon:  70.0, name: 'Индийский океан' },
+  arctic:   { lat:  80.0, lon:   0.0, name: 'Северный Ледовитый' },
+  southern: { lat: -60.0, lon:   0.0, name: 'Южный океан' },
+};
+
+async function fetchMarineSST() {
+  const results = {};
+  await Promise.all(Object.entries(OCEAN_POINTS).map(async ([key, pt]) => {
+    try {
+      const url = `https://marine-api.open-meteo.com/v1/marine?latitude=${pt.lat}&longitude=${pt.lon}` +
+        `&current=sea_surface_temperature,wave_height,wave_direction,wave_period,swell_wave_height` +
+        `&timezone=UTC`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`Marine failed: ${key}`);
+      const d = await res.json();
+      const c = d.current || {};
+      results[key] = {
+        sst:        c.sea_surface_temperature,
+        wave:       c.wave_height,
+        waveDir:    c.wave_direction,
+        wavePeriod: c.wave_period,
+        swell:      c.swell_wave_height,
+      };
+      LIVE[`sst_${key}`]  = c.sea_surface_temperature;
+      LIVE[`wave_${key}`] = c.wave_height;
+    } catch (e) { console.warn(`SST failed ${key}:`, e.message); }
+  }));
+  LIVE.loaded.sst = true;
+  updateSSTDisplays(results);
+  console.log('%c✓ Marine SST+Wave loaded (Open-Meteo)', 'color:#2a9d8f', results);
+  return results;
+}
+
+/* ────────────────────────────────────────────────
+   3. Open-Meteo Air Quality — PM2.5, O₃, NO₂, CO
+   ──────────────────────────────────────────────── */
+async function fetchOceanAirData() {
+  const pt = OCEAN_POINTS.atlantic;
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000); // 8s timeout
+    const url = `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${pt.lat}&longitude=${pt.lon}` +
+      `&current=pm2_5,carbon_monoxide,nitrogen_dioxide,ozone,dust,uv_index&timezone=UTC`;
+    const res = await fetch(url, { signal: controller.signal });
+    clearTimeout(timeout);
+    if (!res.ok) throw new Error('AQ failed');
+    const data = await res.json();
+    LIVE.air_pollution = data.current || {};
+    LIVE.uv_index      = data.current?.uv_index;
+    LIVE.loaded.air    = true;
+    console.log('%c✓ Air Quality loaded (Open-Meteo AQ)', 'color:#2a9d8f', LIVE.air_pollution);
+    updateAirDisplays();
+    return data;
+  } catch (e) {
+    console.warn('AQ fetch failed:', e.message);
+    LIVE.air_pollution = {}; // ensure empty not null
+    updateAirDisplays();     // will show "unavailable" message
+    return null;
+  }
+}
+
+/* ────────────────────────────────────────────────
+   4. Open-Meteo Forecast — wind, humidity, pressure
+      at 5 ocean points
+   ──────────────────────────────────────────────── */
+async function fetchOceanWeather() {
+  const results = {};
+  await Promise.all(Object.entries(OCEAN_POINTS).map(async ([key, pt]) => {
+    try {
+      const url = `https://api.open-meteo.com/v1/forecast?latitude=${pt.lat}&longitude=${pt.lon}` +
+        `&current=wind_speed_10m,wind_direction_10m,relative_humidity_2m,surface_pressure,precipitation` +
+        `&timezone=UTC`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`Weather failed: ${key}`);
+      const d = await res.json();
+      const c = d.current || {};
+      results[key] = {
+        windSpeed:  c.wind_speed_10m,
+        windDir:    c.wind_direction_10m,
+        humidity:   c.relative_humidity_2m,
+        pressure:   c.surface_pressure,
+        precip:     c.precipitation,
+      };
+    } catch (e) { console.warn(`Weather failed ${key}:`, e.message); }
+  }));
+  LIVE.loaded.weather = true;
+  LIVE.weather = results;
+  updateWeatherDisplays(results);
+  console.log('%c✓ Ocean Weather loaded (Open-Meteo Forecast)', 'color:#2a9d8f', results);
+  return results;
+}
+
+/* ────────────────────────────────────────────────
+   5. World Bank — CO₂ emissions
+   ──────────────────────────────────────────────── */
+async function fetchWorldBankClimate() {
+  try {
+    const jsonUrl = 'https://api.worldbank.org/v2/country/WLD/indicator/EN.ATM.CO2E.KT?format=json&mrv=5&per_page=5';
+    const res = await fetch(jsonUrl);
+    if (!res.ok) throw new Error('WB failed');
+    const data = await res.json();
+    if (data[1]?.length > 0) LIVE.wb_co2 = data[1];
+    console.log('%c✓ World Bank CO₂ loaded', 'color:#2a9d8f');
+    return data;
+  } catch(e) { console.warn('World Bank failed:', e.message); return null; }
+}
+
+/* ────────────────────────────────────────────────
+   6. NASA POWER — climate at Pacific point
+   ──────────────────────────────────────────────── */
+async function fetchNASAPower() {
+  const pt = OCEAN_POINTS.pacific;
+  try {
+    const end = new Date(), start = new Date();
+    start.setDate(end.getDate() - 7);
+    const fmt = d => d.toISOString().slice(0,10).replace(/-/g,'');
+    const url = `https://power.larc.nasa.gov/api/temporal/daily/point?parameters=T2M,PRECTOTCORR,WS10M` +
+      `&community=RE&longitude=${pt.lon}&latitude=${pt.lat}&start=${fmt(start)}&end=${fmt(end)}&format=JSON`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('NASA failed');
+    const data = await res.json();
+    LIVE.nasa = data.properties?.parameter;
+    console.log('%c✓ NASA POWER loaded', 'color:#2a9d8f');
+    return data;
+  } catch(e) { console.warn('NASA POWER failed:', e.message); return null; }
+}
+
+/* ════════════════════════════════════════════════
+   UPDATE FUNCTIONS — apply real data to UI
+   ════════════════════════════════════════════════ */
+
+/* ── CO₂ displays ────────────────────────────── */
+function updateCO2Displays() {
+  if (!LIVE.co2_current) return;
+  updateCo2ChartWithReal();
+  updatePhDisplay();
+  // Animate CO₂ value in status bar
+  setApiStatus('co2', true, `CO₂: ${LIVE.co2_current} ppm (NOAA GML)`);
+  // Update co2 live card if exists
+  const co2El = document.getElementById('liveCo2Val');
+  if (co2El) animateLiveValue(co2El, 0, LIVE.co2_current, 1, ' ppm');
+}
+
+/* ── SST + Wave displays ─────────────────────── */
+function updateSSTDisplays(results) {
+  if (!results) return;
+  updateSSTPanel(results);
+  setApiStatus('sst', true, 'SST + Волны: Open-Meteo Marine');
+}
+
+/* ── Air quality displays ────────────────────── */
+function updateAirDisplays() {
+  const aqEl = document.getElementById('liveAqPanel');
+
+  // If API returned nothing, show a clean "unavailable" state
+  if (!LIVE.air_pollution || Object.keys(LIVE.air_pollution).length === 0) {
+    if (aqEl) aqEl.innerHTML = `
+      <div class="aq-item" style="grid-column:1/-1;padding:20px;text-align:center;">
+        <div class="aq-label" style="color:var(--text-muted);font-size:0.8rem">
+          <i class="fas fa-exclamation-circle"></i>
+          Данные о качестве воздуха временно недоступны (API не ответил)
+        </div>
+      </div>`;
+    return;
+  }
+
+  const pm25 = LIVE.air_pollution.pm2_5;
+  const o3   = LIVE.air_pollution.ozone;
+  const no2  = LIVE.air_pollution.nitrogen_dioxide;
+  const uv   = LIVE.uv_index;
+
+  // Status bar — only defined values
+  const parts = [];
+  if (pm25 != null) parts.push(`PM2.5: ${pm25.toFixed(1)} μg/m³`);
+  if (o3   != null) parts.push(`O₃: ${o3.toFixed(0)} μg/m³`);
+  if (no2  != null) parts.push(`NO₂: ${no2.toFixed(1)} μg/m³`);
+  if (uv   != null) parts.push(`УФ: ${uv.toFixed(1)}`);
+  if (parts.length) setApiStatus('air', true, parts.join(' | '));
+
+  if (!aqEl) return;
+
+  const metrics = [
+    { label: 'PM2.5',    val: pm25, unit: ' μg/m³', dec: 1,
+      desc: 'Мелкодисперсные частицы',
+      note: pm25 == null ? '—' : pm25 < 12 ? 'Хорошо' : pm25 < 35 ? 'Умеренно' : 'Плохо',
+      cls:  pm25 == null ? 'moderate' : pm25 < 12 ? 'moderate' : pm25 < 35 ? 'warning' : 'critical' },
+    { label: 'Озон O₃',  val: o3,   unit: ' μg/m³', dec: 0,
+      desc: 'Приземный озон',
+      note: o3   == null ? '—' : o3 < 100 ? 'Норма' : o3 < 180 ? 'Умеренно' : 'Высокий',
+      cls:  o3   == null ? 'moderate' : o3 < 100 ? 'moderate' : o3 < 180 ? 'warning' : 'critical' },
+    { label: 'NO₂',      val: no2,  unit: ' μg/m³', dec: 1,
+      desc: 'Диоксид азота',
+      note: no2  == null ? '—' : no2 < 40 ? 'Норма' : no2 < 200 ? 'Умеренно' : 'Высокий',
+      cls:  no2  == null ? 'moderate' : no2 < 40 ? 'moderate' : no2 < 200 ? 'warning' : 'critical' },
+    { label: 'УФ-индекс', val: uv,  unit: '',        dec: 1,
+      desc: 'Ультрафиолетовый индекс',
+      note: uv   == null ? '—' : uv < 3 ? 'Низкий' : uv < 6 ? 'Умеренный' : uv < 8 ? 'Высокий' : 'Очень высокий',
+      cls:  uv   == null ? 'moderate' : uv < 3 ? 'moderate' : uv < 6 ? 'warning' : 'critical' },
+  ];
+
+  aqEl.innerHTML = metrics.map(m => `
+    <div class="aq-item">
+      <div class="aq-label">${m.label}</div>
+      <div class="aq-desc-small">${m.desc}</div>
+      <div class="aq-val-wrap">
+        <span class="aq-val ${m.cls}" id="aqv_${m.label.replace(/\W/g,'_')}">
+          ${m.val != null ? m.val.toFixed(m.dec) + m.unit : '—'}
+        </span>
+      </div>
+      <div class="aq-note ${m.cls}">${m.note}</div>
+    </div>
+  `).join('');
+
+  // Animate only values that actually exist — wait one frame for DOM to settle
+  requestAnimationFrame(() => {
+    metrics.forEach(m => {
+      if (m.val == null) return;
+      const el = document.getElementById(`aqv_${m.label.replace(/\W/g,'_')}`);
+      if (el) animateLiveValue(el, 0, m.val, m.dec, m.unit, 1200);
+    });
+  });
+}
+
+/* ── Weather at ocean points ─────────────────── */
+function updateWeatherDisplays(results) {
+  if (!results) return;
+  const wPanel = document.getElementById('liveWeatherPanel');
+  if (!wPanel) return;
+
+  wPanel.innerHTML = Object.entries(results).map(([key, d]) => {
+    if (!d || d.windSpeed == null) return '';
+    const pt = OCEAN_POINTS[key];
+    const deg = d.windDir != null ? windDirLabel(d.windDir) : '';
+    return `
+      <div class="wx-item">
+        <div class="wx-ocean">${pt.name}</div>
+        <div class="wx-rows">
+          <div class="wx-row">
+            <span class="wx-icon">💨</span>
+            <span class="wx-val" id="wx_wind_${key}">0</span>
+            <span class="wx-unit">км/ч ${deg}</span>
+          </div>
+          <div class="wx-row">
+            <span class="wx-icon">💧</span>
+            <span class="wx-val" id="wx_hum_${key}">0</span>
+            <span class="wx-unit">% влажность</span>
+          </div>
+          <div class="wx-row">
+            <span class="wx-icon">🔵</span>
+            <span class="wx-val" id="wx_pres_${key}">0</span>
+            <span class="wx-unit">hPa</span>
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+
+  // Animate values — wait one frame for DOM
+  requestAnimationFrame(() => {
+    Object.entries(results).forEach(([key, d]) => {
+      if (!d) return;
+      if (d.windSpeed != null) animateLiveValue(document.getElementById(`wx_wind_${key}`), 0, d.windSpeed, 1);
+      if (d.humidity  != null) animateLiveValue(document.getElementById(`wx_hum_${key}`),  0, d.humidity,  0);
+      if (d.pressure  != null) animateLiveValue(document.getElementById(`wx_pres_${key}`), 0, d.pressure,  1);
+    });
+  });
+
+  setApiStatus('weather', true, `Ветер / Давление / Влажность: Open-Meteo`);
+}
+
+function windDirLabel(deg) {
+  const dirs = ['С','СВ','В','ЮВ','Ю','ЮЗ','З','СЗ'];
+  return dirs[Math.round(deg / 45) % 8];
+}
+
+/* ── SST Panel with animation ────────────────── */
+function updateSSTPanel(results) {
+  const panel = document.getElementById('sstLivePanel');
+  if (!panel) return;
+
+  panel.innerHTML = Object.entries(results).map(([key, d]) => {
+    const pt = OCEAN_POINTS[key];
+    if (!d || (d.sst == null && d.wave == null)) return '';
+    const baseline = { pacific:28, atlantic:26, indian:27, arctic:-1, southern:2 };
+    const anomaly  = d.sst != null ? (d.sst - (baseline[key] ?? 25)) : null;
+    const sevClass = anomaly == null ? 'moderate'
+      : anomaly > 1.5 ? 'critical' : anomaly > 0.5 ? 'danger' : 'moderate';
+    return `
+      <div class="sst-item">
+        <div class="sst-name">${pt.name}</div>
+        <div class="sst-val-wrap">
+          ${d.sst  != null ? `<span class="sst-val ${sevClass}" id="sst_${key}">0°C</span>` : ''}
+          ${d.wave != null ? `<span class="sst-wave" id="wave_${key}">🌊 0м</span>` : ''}
+        </div>
+        ${d.wavePeriod != null ? `<div class="sst-extra">Период волн: <span id="period_${key}">0</span> с</div>` : ''}
+        <div class="sst-coords">${pt.lat}°, ${pt.lon}°</div>
+      </div>`;
+  }).join('');
+
+  // Animate all values — wait one frame for DOM
+  requestAnimationFrame(() => {
+    Object.entries(results).forEach(([key, d]) => {
+      if (!d) return;
+      if (d.sst        != null) animateLiveValue(document.getElementById(`sst_${key}`),    0, d.sst,        1, '°C', 1400);
+      if (d.wave       != null) animateLiveValue(document.getElementById(`wave_${key}`),   0, d.wave,       1, 'м',  1000);
+      if (d.wavePeriod != null) animateLiveValue(document.getElementById(`period_${key}`), 0, d.wavePeriod, 1, ' с', 900);
+    });
+  });
+}
+
+/* ── CO₂ chart with real data ────────────────── */
+function updateCo2ChartWithReal() {
+  const chartInst = Chart.getChart('co2Chart');
+  if (!chartInst || !LIVE.co2_monthly?.length) return;
+  const byYear = {};
+  LIVE.co2_monthly.forEach(d => {
+    if (d.year >= 1960 && d.value > 0) {
+      if (!byYear[d.year]) byYear[d.year] = [];
+      byYear[d.year].push(d.value);
+    }
+  });
+  const years  = Object.keys(byYear).map(Number).sort((a,b)=>a-b);
+  const values = years.map(y => +(byYear[y].reduce((s,v)=>s+v,0)/byYear[y].length).toFixed(2));
+  chartInst.data.labels = years;
+  chartInst.data.datasets[0].data = values;
+  chartInst.data.datasets[1].data = years.map(() => 280);
+  chartInst.options.plugins.title = {
+    display: true, text: '🛰️ Реальные данные: NOAA GML Mauna Loa',
+    color: '#2a9d8f', font: { size: 10, family: "'IBM Plex Mono', monospace" },
+    padding: { bottom: 6 },
+  };
+  chartInst.update('none');
+  const src = document.querySelector('#co2Chart')?.closest('.chart-card')?.querySelector('.chart-source');
+  if (src) src.innerHTML = '<span class="live-badge">● LIVE</span> NOAA GML / Mauna Loa Observatory';
+}
+
+function updatePhDisplay() {
+  if (!LIVE.co2_current) return;
+  const estPh = (8.19 - 0.00214 * (LIVE.co2_current - 280)).toFixed(3);
+  const phNow = document.querySelector('.acid-point.current .acid-ph');
+  if (phNow) {
+    phNow.textContent = `pH ${estPh}`;
+    phNow.title = `Расчёт: CO₂ ${LIVE.co2_current} ppm (NOAA GML)`;
+  }
+}
+
+/* ── API status bar ──────────────────────────── */
+function setApiStatus(key, ok, msg) {
+  const bar = document.getElementById('apiStatusBar');
+  if (!bar) return;
+  let item = bar.querySelector(`[data-api="${key}"]`);
+  if (!item) {
+    item = document.createElement('div');
+    item.className = 'api-status-item';
+    item.dataset.api = key;
+    bar.appendChild(item);
+  }
+  item.innerHTML = `<span class="api-dot ${ok?'ok':'err'}"></span>${msg}`;
+}
+
+/* ════════════════════════════════════════════════
+   MASTER FETCH
+   ════════════════════════════════════════════════ */
+async function fetchAllLiveData() {
+  const bar = document.getElementById('apiStatusBar');
+  if (bar) bar.innerHTML = '<span class="api-loading-msg"><i class="fas fa-satellite-dish fa-spin"></i> Получение данных из API...</span>';
+
+  // Priority tier 1 — most visible data
+  const [co2, sst, air, weather] = await Promise.all([
+    fetchCO2Data(),
+    fetchMarineSST(),
+    fetchOceanAirData(),
+    fetchOceanWeather(),
+  ]);
+
+  // Tier 2 — supplementary
+  fetchWorldBankClimate();
+  fetchNASAPower();
+
+  const loadMsg = bar?.querySelector('.api-loading-msg');
+  if ((co2 || sst || air || weather) && loadMsg) loadMsg.remove();
+
+  updateLastUpdateTime();
+  setTimeout(fetchAllLiveData, 30 * 60 * 1000);
+}
+
+
+
+
 function initNavigation() {
   const navLinks = document.querySelectorAll('.nav-link');
   const sections = document.querySelectorAll('.section');
@@ -822,217 +1293,208 @@ function severityColor(s) {
   return { critical: '#e63946', danger: '#f4a261', warning: '#e9c46a', moderate: '#2a9d8f' }[s] || '#2a9d8f';
 }
 
-// ── PRECISE CONTINENT PATH DATA (Natural Earth simplified, normalised 0..1)
-// Projection: Equirectangular. X = (lon+180)/360, Y = (90-lat)/180
-// Points traced from Natural Earth 110m land dataset
+// ══════════════════════════════════════════════════
+// PRECISE WORLD MAP — Natural Earth 110m simplified
+// Projection: Equirectangular
+//   x = (longitude + 180) / 360
+//   y = (90 − latitude)  / 180
+// Points hand-traced from Natural Earth dataset
+// ══════════════════════════════════════════════════
 const CONTINENTS = {
-  northAmerica: {
-    color: '#1a3045',
-    stroke: 'rgba(42,157,143,0.6)',
-    holes: [],
-    points: [
-      // Alaska peninsula + west coast Canada
-      [0.040,0.160],[0.055,0.145],[0.068,0.152],[0.072,0.168],[0.060,0.178],
-      [0.078,0.172],[0.090,0.165],[0.102,0.160],[0.108,0.172],[0.098,0.185],
-      [0.112,0.180],[0.124,0.176],[0.132,0.182],[0.138,0.195],[0.142,0.210],
-      // West coast USA
-      [0.148,0.220],[0.152,0.240],[0.154,0.260],[0.156,0.278],[0.152,0.292],
-      [0.148,0.305],[0.152,0.315],[0.148,0.330],
-      // Baja / Mexico west
-      [0.148,0.345],[0.152,0.360],[0.156,0.375],[0.158,0.390],[0.156,0.405],
-      // Central America
-      [0.220,0.395],[0.228,0.405],[0.232,0.418],[0.238,0.425],[0.244,0.418],
-      [0.248,0.408],[0.255,0.415],
-      // Caribbean & Gulf coast
-      [0.260,0.345],[0.278,0.340],[0.292,0.330],[0.310,0.320],[0.325,0.318],
-      [0.335,0.305],[0.340,0.295],[0.348,0.285],[0.358,0.282],
-      // East coast USA
-      [0.360,0.268],[0.362,0.252],[0.360,0.240],[0.356,0.228],[0.358,0.215],
-      [0.355,0.200],[0.352,0.188],
-      // New England / Maritime Canada
-      [0.355,0.175],[0.362,0.162],[0.372,0.155],[0.380,0.148],[0.388,0.140],
-      [0.395,0.132],[0.390,0.120],[0.382,0.112],[0.375,0.105],[0.368,0.098],
-      // Labrador / Hudson Bay area
-      [0.355,0.095],[0.340,0.090],[0.325,0.088],[0.310,0.082],[0.298,0.075],
-      [0.285,0.068],[0.272,0.062],[0.260,0.058],[0.248,0.055],[0.235,0.055],
-      [0.222,0.058],[0.210,0.062],[0.200,0.068],[0.192,0.078],[0.188,0.092],
-      [0.185,0.108],[0.180,0.122],[0.172,0.135],[0.162,0.142],[0.152,0.148],
-      [0.140,0.152],[0.128,0.155],[0.115,0.155],[0.100,0.152],[0.085,0.148],
-      [0.072,0.142],[0.060,0.138],[0.050,0.140],
-    ]
-  },
-  southAmerica: {
-    color: '#1a3045',
-    stroke: 'rgba(42,157,143,0.6)',
-    points: [
-      [0.258,0.418],[0.268,0.408],[0.278,0.402],[0.290,0.398],[0.302,0.395],
-      [0.315,0.392],[0.325,0.388],[0.335,0.382],[0.342,0.392],[0.348,0.402],
-      [0.352,0.415],[0.355,0.428],[0.358,0.442],[0.360,0.458],[0.360,0.475],
-      [0.358,0.492],[0.355,0.510],[0.350,0.528],[0.344,0.546],[0.336,0.562],
-      [0.326,0.578],[0.315,0.592],[0.305,0.605],[0.296,0.616],[0.288,0.625],
-      [0.280,0.630],[0.272,0.628],[0.265,0.620],[0.260,0.608],[0.256,0.594],
-      [0.254,0.578],[0.254,0.562],[0.256,0.545],[0.258,0.528],[0.260,0.510],
-      [0.260,0.492],[0.258,0.474],[0.255,0.456],[0.252,0.440],[0.250,0.425],
-    ]
-  },
-  europe: {
-    color: '#1a3045',
-    stroke: 'rgba(42,157,143,0.6)',
-    points: [
-      // Iberian peninsula
-      [0.450,0.185],[0.458,0.178],[0.468,0.172],[0.478,0.168],[0.488,0.165],
-      [0.498,0.165],[0.505,0.168],[0.510,0.175],[0.512,0.185],[0.510,0.195],
-      [0.505,0.205],[0.498,0.212],[0.490,0.215],[0.480,0.215],[0.470,0.210],
-      // France, Benelux
-      [0.465,0.200],[0.462,0.190],[0.465,0.180],[0.472,0.172],
-      [0.482,0.162],[0.492,0.155],[0.502,0.150],[0.512,0.148],[0.522,0.148],
-      [0.530,0.150],[0.538,0.154],[0.544,0.160],[0.548,0.168],[0.548,0.178],
-      // Germany, Scandinavia
-      [0.545,0.162],[0.540,0.152],[0.535,0.142],[0.530,0.132],[0.528,0.120],
-      [0.525,0.108],[0.522,0.098],[0.518,0.088],[0.515,0.078],[0.515,0.068],
-      [0.518,0.060],[0.522,0.055],[0.528,0.052],[0.536,0.052],[0.544,0.055],
-      [0.550,0.060],[0.555,0.068],[0.558,0.078],[0.558,0.090],[0.555,0.102],
-      [0.552,0.112],[0.548,0.122],[0.545,0.132],[0.542,0.142],
-      // Baltic / Finland
-      [0.548,0.118],[0.555,0.108],[0.562,0.098],[0.568,0.088],[0.572,0.078],
-      [0.575,0.068],[0.575,0.058],[0.572,0.050],[0.565,0.045],[0.555,0.042],
-      [0.548,0.042],[0.558,0.048],[0.565,0.058],[0.562,0.070],[0.555,0.080],
-      // UK outline simplified
-      [0.480,0.148],[0.475,0.138],[0.472,0.128],[0.472,0.118],[0.475,0.108],
-      [0.480,0.100],[0.486,0.095],[0.490,0.102],[0.490,0.112],[0.488,0.122],
-      [0.485,0.132],[0.483,0.142],
-    ]
-  },
-  africa: {
-    color: '#1a3045',
-    stroke: 'rgba(42,157,143,0.6)',
-    points: [
-      [0.452,0.205],[0.460,0.198],[0.470,0.192],[0.480,0.188],[0.490,0.185],
-      [0.500,0.182],[0.510,0.182],[0.520,0.184],[0.530,0.188],[0.538,0.194],
-      [0.544,0.202],[0.548,0.212],[0.550,0.222],[0.550,0.235],[0.548,0.250],
-      [0.545,0.265],[0.542,0.280],[0.540,0.298],[0.538,0.315],[0.538,0.332],
-      [0.538,0.350],[0.536,0.368],[0.534,0.385],[0.530,0.402],[0.524,0.418],
-      [0.516,0.434],[0.506,0.450],[0.495,0.464],[0.485,0.476],[0.475,0.486],
-      [0.468,0.494],[0.462,0.498],[0.458,0.498],[0.454,0.492],[0.450,0.480],
-      [0.448,0.465],[0.446,0.448],[0.446,0.430],[0.448,0.412],[0.450,0.395],
-      [0.452,0.378],[0.454,0.360],[0.454,0.342],[0.453,0.325],[0.452,0.308],
-      [0.450,0.290],[0.450,0.272],[0.450,0.255],[0.450,0.238],[0.452,0.222],
-    ]
-  },
-  asia: {
-    color: '#1a3045',
-    stroke: 'rgba(42,157,143,0.6)',
-    points: [
-      // Turkey / Near East
-      [0.548,0.192],[0.558,0.185],[0.568,0.180],[0.580,0.176],[0.592,0.174],
-      [0.605,0.172],[0.618,0.172],[0.628,0.175],[0.635,0.182],[0.638,0.192],
-      // Arabian peninsula
-      [0.638,0.205],[0.640,0.220],[0.645,0.235],[0.650,0.250],[0.655,0.262],
-      [0.660,0.272],[0.665,0.280],[0.670,0.285],[0.675,0.288],[0.680,0.285],
-      [0.685,0.278],[0.688,0.268],[0.688,0.255],[0.685,0.242],[0.680,0.230],
-      [0.675,0.220],[0.670,0.210],[0.665,0.202],[0.660,0.195],[0.658,0.188],
-      // Iran / Central Asia
-      [0.660,0.178],[0.668,0.170],[0.678,0.162],[0.690,0.155],[0.702,0.150],
-      [0.715,0.145],[0.728,0.142],[0.742,0.140],[0.756,0.140],[0.768,0.142],
-      [0.780,0.145],[0.792,0.150],[0.802,0.155],[0.810,0.162],[0.815,0.170],
-      // Russia / Siberia
-      [0.818,0.165],[0.825,0.155],[0.830,0.142],[0.834,0.128],[0.836,0.115],
-      [0.835,0.102],[0.832,0.088],[0.826,0.075],[0.818,0.065],[0.808,0.058],
-      [0.795,0.052],[0.780,0.048],[0.762,0.046],[0.744,0.045],[0.725,0.046],
-      [0.706,0.048],[0.688,0.050],[0.670,0.052],[0.652,0.055],[0.635,0.058],
-      [0.618,0.062],[0.602,0.065],[0.588,0.068],[0.576,0.072],[0.566,0.078],
-      [0.558,0.086],[0.552,0.096],[0.548,0.108],[0.546,0.120],[0.546,0.132],
-      [0.546,0.145],[0.546,0.158],[0.548,0.170],[0.548,0.180],
-      // East Asia coastline
-      [0.820,0.158],[0.824,0.170],[0.826,0.182],[0.824,0.195],[0.820,0.208],
-      [0.815,0.220],[0.808,0.232],[0.800,0.242],[0.790,0.252],[0.778,0.260],
-      [0.768,0.265],[0.758,0.268],[0.748,0.268],[0.738,0.265],[0.728,0.260],
-      [0.718,0.252],[0.710,0.242],[0.702,0.232],[0.695,0.220],[0.690,0.210],
-      // SE Asia / Indochina
-      [0.760,0.268],[0.768,0.278],[0.775,0.290],[0.780,0.302],[0.782,0.315],
-      [0.780,0.328],[0.775,0.340],[0.768,0.350],[0.760,0.358],[0.750,0.362],
-      [0.740,0.362],[0.732,0.358],[0.725,0.350],[0.720,0.340],[0.718,0.328],
-      [0.718,0.315],[0.720,0.302],[0.724,0.290],[0.730,0.278],[0.738,0.270],
-    ]
-  },
-  india: {
-    color: '#1a3045',
-    stroke: 'rgba(42,157,143,0.55)',
-    points: [
-      [0.638,0.192],[0.645,0.200],[0.652,0.210],[0.658,0.222],[0.662,0.235],
-      [0.665,0.250],[0.665,0.265],[0.663,0.280],[0.658,0.295],[0.650,0.308],
-      [0.640,0.320],[0.630,0.328],[0.620,0.332],[0.612,0.330],[0.605,0.322],
-      [0.600,0.310],[0.598,0.296],[0.598,0.282],[0.600,0.268],[0.604,0.254],
-      [0.608,0.240],[0.612,0.228],[0.616,0.216],[0.620,0.205],[0.625,0.196],
-      [0.630,0.190],
-    ]
-  },
-  australia: {
-    color: '#1a3045',
-    stroke: 'rgba(42,157,143,0.6)',
-    points: [
-      [0.770,0.500],[0.782,0.490],[0.795,0.482],[0.808,0.476],[0.822,0.472],
-      [0.836,0.470],[0.850,0.470],[0.862,0.472],[0.872,0.478],[0.880,0.486],
-      [0.886,0.496],[0.890,0.508],[0.890,0.522],[0.888,0.536],[0.882,0.550],
-      [0.874,0.562],[0.864,0.572],[0.852,0.580],[0.838,0.585],[0.824,0.586],
-      [0.810,0.582],[0.797,0.575],[0.785,0.565],[0.776,0.552],[0.769,0.538],
-      [0.765,0.522],[0.764,0.508],
-    ]
-  },
-  newZealand: {
-    color: '#1a3045',
-    stroke: 'rgba(42,157,143,0.45)',
-    points: [
-      [0.905,0.548],[0.910,0.540],[0.916,0.535],[0.922,0.535],[0.926,0.542],
-      [0.926,0.552],[0.922,0.560],[0.916,0.565],[0.910,0.562],[0.906,0.555],
-    ]
-  },
-  greenland: {
-    color: '#162535',
-    stroke: 'rgba(42,157,143,0.4)',
-    points: [
-      [0.338,0.040],[0.350,0.032],[0.365,0.026],[0.380,0.022],[0.395,0.022],
-      [0.410,0.026],[0.422,0.033],[0.430,0.043],[0.432,0.055],[0.428,0.068],
-      [0.420,0.079],[0.408,0.087],[0.394,0.092],[0.378,0.094],[0.362,0.092],
-      [0.348,0.086],[0.338,0.076],[0.332,0.064],[0.332,0.052],
-    ]
-  },
-  iceland: {
-    color: '#1a3045',
-    stroke: 'rgba(42,157,143,0.4)',
-    points: [
-      [0.456,0.075],[0.462,0.068],[0.470,0.064],[0.478,0.062],[0.484,0.065],
-      [0.488,0.072],[0.486,0.080],[0.480,0.086],[0.472,0.088],[0.464,0.085],
-    ]
-  },
-  japan: {
-    color: '#1a3045',
-    stroke: 'rgba(42,157,143,0.45)',
-    points: [
-      [0.838,0.165],[0.842,0.158],[0.848,0.152],[0.854,0.150],[0.859,0.154],
-      [0.860,0.162],[0.857,0.170],[0.851,0.175],[0.844,0.174],[0.839,0.170],
-    ]
-  },
-  madagascar: {
-    color: '#1a3045',
-    stroke: 'rgba(42,157,143,0.4)',
-    points: [
-      [0.556,0.440],[0.560,0.430],[0.564,0.422],[0.568,0.418],[0.572,0.420],
-      [0.574,0.432],[0.572,0.445],[0.568,0.455],[0.562,0.460],[0.556,0.455],
-    ]
-  },
-  antarcticaShape: {
-    color: '#162535',
-    stroke: 'rgba(42,157,143,0.3)',
-    points: [
-      [0.000,0.858],[0.042,0.852],[0.083,0.848],[0.125,0.845],[0.167,0.844],
-      [0.208,0.845],[0.250,0.848],[0.292,0.850],[0.333,0.852],[0.375,0.850],
-      [0.417,0.846],[0.458,0.842],[0.500,0.840],[0.542,0.842],[0.583,0.845],
-      [0.625,0.848],[0.667,0.850],[0.708,0.848],[0.750,0.845],[0.792,0.843],
-      [0.833,0.844],[0.875,0.847],[0.917,0.850],[0.958,0.854],[1.000,0.858],
-      [1.000,1.000],[0.000,1.000],
-    ]
-  },
+
+  northAmerica: { color:'#1a3248', stroke:'rgba(42,157,143,0.65)', points:[
+    // Alaska
+    [0.055,0.178],[0.068,0.162],[0.078,0.155],[0.088,0.160],[0.098,0.152],
+    [0.108,0.148],[0.115,0.155],[0.112,0.168],[0.102,0.172],[0.118,0.165],
+    [0.128,0.158],[0.138,0.162],[0.142,0.175],[0.148,0.185],[0.152,0.195],
+    // Canada west → east
+    [0.148,0.208],[0.150,0.225],[0.152,0.245],[0.154,0.268],[0.155,0.288],
+    [0.152,0.305],[0.148,0.320],[0.152,0.332],
+    // Mexico / Central America south tip
+    [0.158,0.345],[0.162,0.360],[0.165,0.375],[0.168,0.390],[0.168,0.402],
+    [0.175,0.410],[0.182,0.418],[0.190,0.424],[0.198,0.428],[0.205,0.425],
+    [0.212,0.420],[0.218,0.412],[0.225,0.408],
+    // Gulf of Mexico coastline
+    [0.232,0.410],[0.240,0.408],[0.248,0.405],[0.258,0.398],[0.268,0.390],
+    [0.278,0.380],[0.288,0.370],[0.298,0.358],[0.308,0.345],[0.315,0.335],
+    [0.325,0.325],[0.335,0.315],[0.342,0.305],[0.348,0.295],[0.355,0.285],
+    // East coast USA
+    [0.360,0.272],[0.362,0.258],[0.360,0.245],[0.358,0.232],[0.358,0.218],
+    [0.355,0.205],[0.352,0.192],[0.355,0.178],[0.362,0.165],[0.370,0.158],
+    [0.378,0.150],[0.385,0.142],[0.392,0.135],[0.398,0.128],
+    // Maritime Canada / Labrador
+    [0.395,0.118],[0.388,0.110],[0.380,0.104],[0.368,0.098],[0.355,0.093],
+    [0.340,0.088],[0.325,0.085],[0.310,0.082],[0.295,0.078],[0.280,0.072],
+    [0.265,0.065],[0.250,0.060],[0.235,0.056],[0.222,0.055],[0.208,0.058],
+    [0.198,0.065],[0.192,0.075],[0.188,0.088],[0.185,0.102],[0.180,0.115],
+    [0.172,0.128],[0.162,0.138],[0.150,0.145],[0.138,0.150],[0.125,0.152],
+    [0.112,0.150],[0.100,0.148],[0.088,0.148],[0.075,0.148],[0.065,0.152],
+    [0.055,0.158],[0.048,0.165],[0.050,0.175],
+  ]},
+
+  greenland: { color:'#162e42', stroke:'rgba(42,157,143,0.45)', points:[
+    [0.340,0.042],[0.355,0.034],[0.372,0.028],[0.388,0.025],[0.404,0.026],
+    [0.418,0.032],[0.428,0.042],[0.432,0.055],[0.428,0.068],[0.418,0.080],
+    [0.405,0.089],[0.390,0.094],[0.374,0.095],[0.358,0.092],[0.345,0.085],
+    [0.335,0.074],[0.332,0.062],[0.335,0.050],
+  ]},
+
+  iceland: { color:'#1a3248', stroke:'rgba(42,157,143,0.5)', points:[
+    [0.456,0.076],[0.462,0.069],[0.470,0.065],[0.478,0.063],[0.485,0.066],
+    [0.489,0.074],[0.487,0.082],[0.480,0.088],[0.472,0.090],[0.463,0.086],
+  ]},
+
+  southAmerica: { color:'#1a3248', stroke:'rgba(42,157,143,0.65)', points:[
+    [0.260,0.418],[0.270,0.410],[0.280,0.404],[0.292,0.399],[0.305,0.396],
+    [0.318,0.393],[0.328,0.390],[0.338,0.386],[0.345,0.394],[0.350,0.404],
+    [0.354,0.416],[0.358,0.430],[0.360,0.445],[0.362,0.462],[0.362,0.480],
+    [0.360,0.498],[0.356,0.516],[0.350,0.534],[0.343,0.552],[0.334,0.569],
+    [0.323,0.585],[0.311,0.600],[0.300,0.612],[0.290,0.622],[0.281,0.628],
+    [0.272,0.626],[0.265,0.618],[0.260,0.606],[0.257,0.592],[0.256,0.576],
+    [0.256,0.559],[0.258,0.540],[0.260,0.522],[0.261,0.502],[0.261,0.482],
+    [0.259,0.462],[0.256,0.443],[0.254,0.432],[0.252,0.422],
+  ]},
+
+  europe: { color:'#1a3248', stroke:'rgba(42,157,143,0.65)', points:[
+    // Iberia
+    [0.450,0.195],[0.456,0.185],[0.462,0.178],[0.470,0.172],[0.480,0.168],
+    [0.490,0.165],[0.500,0.164],[0.508,0.167],[0.514,0.174],[0.516,0.184],
+    [0.514,0.195],[0.509,0.205],[0.502,0.212],[0.494,0.216],[0.484,0.216],
+    [0.474,0.212],[0.465,0.205],
+    // France
+    [0.468,0.198],[0.464,0.188],[0.468,0.178],[0.476,0.170],[0.485,0.162],
+    [0.494,0.156],[0.504,0.150],[0.514,0.148],[0.524,0.148],[0.532,0.150],
+    [0.540,0.155],[0.546,0.162],[0.549,0.170],[0.549,0.180],
+    // UK (simplified)
+    [0.482,0.150],[0.476,0.140],[0.473,0.130],[0.474,0.120],[0.477,0.110],
+    [0.483,0.103],[0.489,0.100],[0.493,0.108],[0.493,0.118],[0.490,0.128],
+    [0.487,0.138],[0.484,0.148],
+    // Norway / Scandinavia
+    [0.530,0.148],[0.526,0.138],[0.522,0.128],[0.518,0.118],[0.516,0.108],
+    [0.516,0.098],[0.518,0.088],[0.522,0.080],[0.528,0.074],[0.535,0.070],
+    [0.542,0.070],[0.549,0.074],[0.554,0.082],[0.556,0.092],[0.555,0.102],
+    [0.552,0.112],[0.548,0.122],[0.545,0.132],[0.542,0.140],
+    // Finland/Baltic
+    [0.552,0.118],[0.558,0.108],[0.564,0.098],[0.570,0.088],[0.574,0.078],
+    [0.576,0.068],[0.576,0.058],[0.572,0.050],[0.565,0.045],[0.556,0.044],
+    [0.548,0.046],[0.542,0.052],
+    // Balkans/Turkey approach
+    [0.549,0.172],[0.550,0.182],[0.548,0.192],[0.544,0.200],
+    [0.540,0.208],[0.535,0.215],[0.528,0.220],[0.520,0.222],[0.512,0.220],
+    [0.504,0.215],[0.498,0.208],[0.493,0.200],[0.490,0.192],
+  ]},
+
+  africa: { color:'#1a3248', stroke:'rgba(42,157,143,0.65)', points:[
+    [0.452,0.214],[0.460,0.206],[0.470,0.200],[0.480,0.196],[0.492,0.192],
+    [0.504,0.190],[0.516,0.190],[0.527,0.192],[0.538,0.197],[0.546,0.204],
+    [0.550,0.214],[0.552,0.226],[0.551,0.240],[0.549,0.256],[0.546,0.272],
+    [0.543,0.290],[0.540,0.308],[0.539,0.328],[0.538,0.348],[0.537,0.368],
+    [0.535,0.388],[0.532,0.408],[0.527,0.428],[0.520,0.446],[0.512,0.462],
+    [0.502,0.478],[0.492,0.492],[0.482,0.504],[0.472,0.514],[0.464,0.520],
+    [0.458,0.524],[0.453,0.522],[0.448,0.514],[0.445,0.502],[0.443,0.488],
+    [0.442,0.472],[0.443,0.455],[0.444,0.438],[0.446,0.420],[0.447,0.402],
+    [0.448,0.384],[0.448,0.366],[0.448,0.348],[0.448,0.330],[0.448,0.312],
+    [0.449,0.293],[0.450,0.274],[0.451,0.255],[0.451,0.236],[0.452,0.222],
+    // Madagascar
+  ]},
+
+  madagascar: { color:'#1a3248', stroke:'rgba(42,157,143,0.45)', points:[
+    [0.558,0.438],[0.562,0.428],[0.566,0.420],[0.570,0.416],[0.574,0.420],
+    [0.576,0.432],[0.574,0.445],[0.569,0.457],[0.562,0.464],[0.556,0.460],
+    [0.555,0.448],
+  ]},
+
+  // Eurasia merged as Asia (big blob)
+  asia: { color:'#1a3248', stroke:'rgba(42,157,143,0.65)', points:[
+    // Turkey / Anatolia west
+    [0.550,0.224],[0.558,0.218],[0.568,0.212],[0.578,0.208],[0.590,0.204],
+    [0.602,0.202],[0.614,0.202],[0.624,0.205],[0.632,0.212],[0.636,0.222],
+    // Middle East / Arabian pen. entry
+    [0.638,0.235],[0.640,0.250],[0.644,0.265],[0.650,0.278],[0.656,0.290],
+    [0.662,0.300],[0.668,0.308],[0.674,0.315],[0.680,0.318],[0.686,0.314],
+    [0.690,0.306],[0.692,0.295],[0.692,0.282],[0.688,0.268],[0.683,0.255],
+    [0.677,0.242],[0.671,0.230],[0.665,0.218],[0.660,0.208],[0.656,0.198],
+    [0.652,0.190],[0.650,0.182],
+    // Iran / Persia
+    [0.652,0.174],[0.660,0.166],[0.670,0.158],[0.682,0.152],[0.694,0.146],
+    [0.706,0.142],[0.720,0.138],[0.734,0.136],[0.748,0.136],[0.762,0.138],
+    // Central Asia / Siberia
+    [0.774,0.142],[0.786,0.148],[0.796,0.155],[0.804,0.162],[0.810,0.170],
+    [0.814,0.165],[0.820,0.155],[0.826,0.142],[0.830,0.128],[0.832,0.114],
+    [0.830,0.100],[0.826,0.086],[0.818,0.074],[0.808,0.064],[0.796,0.056],
+    [0.780,0.050],[0.764,0.045],[0.746,0.042],[0.728,0.041],[0.710,0.043],
+    [0.692,0.045],[0.674,0.048],[0.656,0.052],[0.638,0.056],[0.620,0.060],
+    [0.603,0.064],[0.587,0.068],[0.573,0.074],[0.561,0.082],[0.552,0.092],
+    [0.548,0.104],[0.547,0.118],[0.547,0.132],[0.548,0.146],[0.548,0.160],
+    [0.549,0.172],[0.550,0.184],[0.549,0.196],[0.548,0.208],[0.548,0.220],
+    // East Asian coastline
+    [0.820,0.158],[0.824,0.170],[0.826,0.184],[0.824,0.198],[0.820,0.212],
+    [0.814,0.225],[0.806,0.236],[0.795,0.246],[0.783,0.254],[0.770,0.260],
+    [0.758,0.264],[0.746,0.265],[0.734,0.264],[0.722,0.260],[0.710,0.254],
+    [0.700,0.246],[0.691,0.237],[0.684,0.226],[0.678,0.214],[0.672,0.202],
+    // Indochina / SE Asia coast
+    [0.762,0.270],[0.770,0.282],[0.776,0.295],[0.780,0.308],[0.781,0.322],
+    [0.778,0.336],[0.773,0.348],[0.765,0.358],[0.756,0.365],[0.746,0.368],
+    [0.736,0.368],[0.726,0.364],[0.718,0.356],[0.712,0.345],[0.709,0.332],
+    [0.709,0.318],[0.712,0.305],[0.718,0.293],[0.726,0.281],[0.736,0.272],
+    [0.746,0.266],
+  ]},
+
+  india: { color:'#1a3248', stroke:'rgba(42,157,143,0.6)', points:[
+    [0.638,0.208],[0.645,0.218],[0.652,0.230],[0.658,0.244],[0.662,0.258],
+    [0.664,0.274],[0.663,0.290],[0.658,0.306],[0.650,0.320],[0.640,0.332],
+    [0.630,0.340],[0.620,0.344],[0.612,0.340],[0.606,0.330],[0.602,0.316],
+    [0.600,0.301],[0.601,0.286],[0.604,0.271],[0.608,0.256],[0.613,0.243],
+    [0.618,0.231],[0.624,0.220],[0.630,0.212],
+  ]},
+
+  sriLanka: { color:'#1a3248', stroke:'rgba(42,157,143,0.4)', points:[
+    [0.628,0.349],[0.631,0.344],[0.635,0.342],[0.638,0.345],[0.639,0.351],
+    [0.636,0.356],[0.631,0.357],[0.628,0.353],
+  ]},
+
+  australia: { color:'#1a3248', stroke:'rgba(42,157,143,0.65)', points:[
+    [0.770,0.500],[0.782,0.490],[0.796,0.482],[0.812,0.476],[0.828,0.474],
+    [0.844,0.474],[0.858,0.478],[0.870,0.486],[0.880,0.498],[0.886,0.512],
+    [0.888,0.528],[0.886,0.544],[0.880,0.560],[0.871,0.574],[0.859,0.584],
+    [0.845,0.591],[0.830,0.594],[0.815,0.591],[0.801,0.584],[0.789,0.572],
+    [0.780,0.558],[0.773,0.542],[0.768,0.526],[0.766,0.510],
+  ]},
+
+  newZealandN: { color:'#1a3248', stroke:'rgba(42,157,143,0.45)', points:[
+    [0.905,0.541],[0.910,0.534],[0.916,0.530],[0.921,0.532],[0.924,0.540],
+    [0.922,0.550],[0.916,0.556],[0.910,0.554],[0.906,0.547],
+  ]},
+
+  newZealandS: { color:'#1a3248', stroke:'rgba(42,157,143,0.45)', points:[
+    [0.903,0.558],[0.908,0.552],[0.914,0.549],[0.920,0.551],[0.924,0.558],
+    [0.924,0.568],[0.919,0.576],[0.912,0.580],[0.905,0.577],[0.902,0.568],
+  ]},
+
+  japan: { color:'#1a3248', stroke:'rgba(42,157,143,0.45)', points:[
+    [0.838,0.165],[0.843,0.158],[0.849,0.152],[0.856,0.150],[0.861,0.155],
+    [0.862,0.164],[0.858,0.172],[0.852,0.177],[0.844,0.175],[0.839,0.170],
+  ]},
+
+  borneo: { color:'#1a3248', stroke:'rgba(42,157,143,0.45)', points:[
+    [0.790,0.330],[0.798,0.322],[0.806,0.318],[0.815,0.318],[0.822,0.324],
+    [0.826,0.333],[0.824,0.344],[0.818,0.354],[0.809,0.360],[0.800,0.360],
+    [0.792,0.354],[0.788,0.344],[0.788,0.336],
+  ]},
+
+  sumatra: { color:'#1a3248', stroke:'rgba(42,157,143,0.45)', points:[
+    [0.710,0.338],[0.718,0.332],[0.728,0.328],[0.738,0.330],[0.745,0.338],
+    [0.748,0.348],[0.745,0.358],[0.738,0.364],[0.728,0.366],[0.720,0.362],
+    [0.713,0.354],[0.710,0.346],
+  ]},
+
+  antarcticaShape: { color:'#162e42', stroke:'rgba(42,157,143,0.35)', points:[
+    [0.000,0.860],[0.050,0.854],[0.100,0.850],[0.150,0.847],[0.200,0.845],
+    [0.250,0.846],[0.300,0.848],[0.350,0.848],[0.400,0.846],[0.450,0.843],
+    [0.500,0.842],[0.550,0.843],[0.600,0.846],[0.650,0.848],[0.700,0.847],
+    [0.750,0.845],[0.800,0.845],[0.850,0.847],[0.900,0.850],[0.950,0.854],
+    [1.000,0.858],[1.000,1.000],[0.000,1.000],
+  ]},
 };
 
 
@@ -1653,5 +2115,8 @@ document.addEventListener('DOMContentLoaded', () => {
   // Admin system
   initAdmin();
 
-  console.log('%cOCEANWATCH v1.0 — Система мониторинга запущена', 'color:#2a9d8f;font-family:monospace;font-size:14px;font-weight:bold');
+  // ── Fetch real live data from APIs ──────────────
+  fetchAllLiveData();
+
+  console.log('%cOCEANWATCH v2.0 — Система мониторинга запущена с реальными данными', 'color:#2a9d8f;font-family:monospace;font-size:14px;font-weight:bold');
 });

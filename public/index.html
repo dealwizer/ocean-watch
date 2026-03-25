@@ -70,7 +70,10 @@
     </div>
   </div>
 
-  <!-- ═══════════ MAIN ═══════════ -->
+  <!-- ═══════════ API STATUS BAR ═══════════ -->
+  <div class="api-status-bar" id="apiStatusBar">
+    <span class="api-loading-msg"><i class="fas fa-satellite-dish fa-spin"></i> Получение данных из API...</span>
+  </div>
   <main>
 
     <!-- SECTION: OVERVIEW -->
@@ -227,6 +230,36 @@
         <p class="section-desc">Пластик, нефтяные разливы, нутриентное загрязнение и мёртвые зоны</p>
       </div>
 
+      <!-- Live Air Quality Panel -->
+      <div class="live-data-block">
+        <div class="live-block-header">
+          <span class="live-dot-anim"></span>
+          <span>LIVE — Качество воздуха над Атлантическим океаном (20°N, 40°W)</span>
+          <span class="live-source">Open-Meteo Air Quality API</span>
+        </div>
+        <div class="aq-live-grid" id="liveAqPanel">
+          <div class="aq-item skeleton"><div class="aq-label">Загрузка PM2.5...</div></div>
+          <div class="aq-item skeleton"><div class="aq-label">Загрузка O₃...</div></div>
+          <div class="aq-item skeleton"><div class="aq-label">Загрузка NO₂...</div></div>
+          <div class="aq-item skeleton"><div class="aq-label">Загрузка УФ...</div></div>
+        </div>
+      </div>
+
+      <!-- Live Air Quality Panel — логично здесь: загрязнение воздуха над океаном -->
+      <div class="live-data-block" style="margin-bottom:24px">
+        <div class="live-block-header">
+          <span class="live-dot-anim"></span>
+          <span>LIVE — Загрязнение воздуха над Атлантическим океаном (20°N, 40°W)</span>
+          <span class="live-source">Open-Meteo Air Quality API</span>
+        </div>
+        <div class="aq-live-grid" id="liveAqPanel">
+          <div class="aq-item skeleton"><div class="aq-label">Загрузка...</div></div>
+          <div class="aq-item skeleton"><div class="aq-label">Загрузка...</div></div>
+          <div class="aq-item skeleton"><div class="aq-label">Загрузка...</div></div>
+          <div class="aq-item skeleton"><div class="aq-label">Загрузка...</div></div>
+        </div>
+      </div>
+
       <div class="pollution-stats-grid">
         <div class="stat-card">
           <div class="stat-icon"><i class="fas fa-globe-americas"></i></div>
@@ -339,6 +372,38 @@
         <div class="section-label"><i class="fas fa-thermometer-half"></i> ТЕМПЕРАТУРА</div>
         <h2 class="section-title">Тепловое состояние<br>Мирового океана</h2>
         <p class="section-desc">Данные о температуре поверхности, тепловом содержании и морских тепловых волнах</p>
+      </div>
+
+      <!-- Live SST Panel -->
+      <div class="live-data-block">
+        <div class="live-block-header">
+          <span class="live-dot-anim"></span>
+          <span>LIVE — Температура поверхности океана + Волны</span>
+          <span class="live-source">Open-Meteo Marine API</span>
+        </div>
+        <div class="sst-live-grid" id="sstLivePanel">
+          <div class="sst-item skeleton"><div class="sst-name">Загрузка...</div></div>
+          <div class="sst-item skeleton"><div class="sst-name">Загрузка...</div></div>
+          <div class="sst-item skeleton"><div class="sst-name">Загрузка...</div></div>
+          <div class="sst-item skeleton"><div class="sst-name">Загрузка...</div></div>
+          <div class="sst-item skeleton"><div class="sst-name">Загрузка...</div></div>
+        </div>
+      </div>
+
+      <!-- Live Weather Panel (Wind / Humidity / Pressure) -->
+      <div class="live-data-block" style="margin-bottom:24px">
+        <div class="live-block-header">
+          <span class="live-dot-anim"></span>
+          <span>LIVE — Ветер / Влажность / Давление над океанами</span>
+          <span class="live-source">Open-Meteo Forecast API</span>
+        </div>
+        <div class="wx-live-grid" id="liveWeatherPanel">
+          <div class="wx-item skeleton"><div class="wx-ocean">Загрузка...</div></div>
+          <div class="wx-item skeleton"><div class="wx-ocean">Загрузка...</div></div>
+          <div class="wx-item skeleton"><div class="wx-ocean">Загрузка...</div></div>
+          <div class="wx-item skeleton"><div class="wx-ocean">Загрузка...</div></div>
+          <div class="wx-item skeleton"><div class="wx-ocean">Загрузка...</div></div>
+        </div>
       </div>
 
       <div class="temp-hero-stats">

@@ -1285,8 +1285,176 @@ main {
 }
 
 /* ══════════════════════════════════════════════════
-   ADMIN BUTTON (HEADER)
+   API STATUS BAR
    ══════════════════════════════════════════════════ */
+.api-status-bar {
+  position: fixed;
+  top: calc(var(--header-h) + var(--ticker-h));
+  left: 0; right: 0;
+  height: 28px;
+  background: rgba(9,19,26,0.96);
+  border-bottom: 1px solid rgba(42,157,143,0.12);
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 0 20px;
+  z-index: 98;
+  overflow: hidden;
+}
+
+.api-loading-msg {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  display: flex; align-items: center; gap: 8px;
+  letter-spacing: 0.05em;
+}
+
+.api-status-item {
+  display: flex; align-items: center; gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.api-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.api-dot.ok  { background: var(--safe);     box-shadow: 0 0 5px var(--safe); }
+.api-dot.err { background: var(--critical); box-shadow: 0 0 5px var(--critical); }
+
+/* Adjust main content for extra API bar */
+main {
+  padding-top: calc(var(--header-h) + var(--ticker-h) + 28px) !important;
+}
+
+/* ── Live data badge ──────────────────────────── */
+.live-badge {
+  display: inline-flex; align-items: center;
+  background: rgba(76,175,125,0.15);
+  color: var(--safe);
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 100px;
+  border: 1px solid rgba(76,175,125,0.3);
+  letter-spacing: 0.06em;
+  margin-right: 6px;
+}
+
+/* ── Live block (SST panel etc.) ──────────────── */
+.live-data-block {
+  background: var(--bg-card);
+  border: 1px solid rgba(76,175,125,0.2);
+  border-radius: var(--radius-lg);
+  margin-bottom: 24px;
+  overflow: hidden;
+}
+
+.live-block-header {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 18px;
+  background: rgba(76,175,125,0.07);
+  border-bottom: 1px solid rgba(76,175,125,0.15);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--safe);
+  letter-spacing: 0.06em;
+}
+
+.live-dot-anim {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--safe);
+  box-shadow: 0 0 0 0 rgba(76,175,125,0.5);
+  animation: pulse 1.8s infinite;
+  flex-shrink: 0;
+}
+
+.live-source {
+  margin-left: auto;
+  font-size: 0.62rem;
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.sst-live-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 0;
+}
+
+.sst-item {
+  padding: 14px 18px;
+  border-right: 1px solid var(--border-card);
+  transition: background .2s;
+}
+
+.sst-item:last-child { border-right: none; }
+.sst-item:hover { background: rgba(255,255,255,0.025); }
+
+.sst-item.skeleton .sst-name {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  animation: shimmer 1.5s infinite ease-in-out;
+}
+
+@keyframes shimmer {
+  0%, 100% { opacity: 0.4; }
+  50%       { opacity: 0.8; }
+}
+
+.sst-name {
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+  font-weight: 500;
+}
+
+.sst-val-wrap {
+  display: flex; align-items: baseline; gap: 10px;
+  margin-bottom: 4px;
+}
+
+.sst-val {
+  font-family: var(--font-mono);
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+
+.sst-val.critical { color: var(--critical); }
+.sst-val.danger   { color: var(--danger); }
+.sst-val.moderate { color: var(--moderate); }
+
+.sst-wave {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.sst-coords {
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  color: var(--text-muted);
+  letter-spacing: 0.05em;
+}
+
+@media (max-width: 900px) {
+  .sst-live-grid { grid-template-columns: repeat(3, 1fr); }
+}
+
+@media (max-width: 600px) {
+  .sst-live-grid { grid-template-columns: repeat(2, 1fr); }
+  .api-status-bar { display: none; }
+}
+
+
 .btn-admin {
   display: flex;
   align-items: center;
@@ -1809,7 +1977,137 @@ main {
   flex-shrink: 0;
 }
 
-/* ── Save toast ─────────────────────────────────── */
+/* ── Weather panel ─────────────────────────────── */
+.wx-live-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+}
+
+.wx-item {
+  padding: 14px 18px;
+  border-right: 1px solid var(--border-card);
+  transition: background .2s;
+}
+
+.wx-item:last-child { border-right: none; }
+.wx-item:hover { background: rgba(255,255,255,0.025); }
+
+.wx-item.skeleton .wx-ocean {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  animation: shimmer 1.5s infinite ease-in-out;
+}
+
+.wx-ocean {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 10px;
+}
+
+.wx-rows { display: flex; flex-direction: column; gap: 5px; }
+
+.wx-row {
+  display: flex; align-items: baseline; gap: 6px;
+  font-size: 0.78rem;
+}
+
+.wx-icon { font-size: 0.85rem; }
+
+.wx-val {
+  font-family: var(--font-mono);
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  min-width: 36px;
+}
+
+.wx-unit { font-size: 0.68rem; color: var(--text-muted); }
+
+/* ── Air Quality panel ─────────────────────────── */
+.aq-live-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.aq-item {
+  padding: 16px 20px;
+  border-right: 1px solid var(--border-card);
+  transition: background .2s;
+}
+
+.aq-item:last-child { border-right: none; }
+.aq-item:hover { background: rgba(255,255,255,0.025); }
+
+.aq-item.skeleton .aq-label {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  animation: shimmer 1.5s infinite ease-in-out;
+}
+
+.aq-label {
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+  margin-bottom: 2px;
+  font-weight: 600;
+}
+
+.aq-desc-small {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+  font-style: italic;
+}
+
+.aq-val-wrap { margin-bottom: 5px; }
+
+.aq-val {
+  font-family: var(--font-mono);
+  font-size: 1.3rem;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.aq-val.critical { color: var(--critical); }
+.aq-val.danger   { color: var(--danger); }
+.aq-val.warning  { color: var(--warning); }
+.aq-val.moderate { color: var(--moderate); }
+
+.aq-note {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  letter-spacing: 0.06em;
+  padding: 2px 8px;
+  border-radius: 100px;
+  display: inline-block;
+  margin-top: 4px;
+}
+
+.aq-note.critical { background: rgba(230,57,70,0.12);  color: var(--critical); }
+.aq-note.danger   { background: rgba(244,162,97,0.12); color: var(--danger);   }
+.aq-note.warning  { background: rgba(233,196,106,0.12);color: var(--warning);  }
+.aq-note.moderate { background: rgba(42,157,143,0.12); color: var(--moderate); }
+
+/* ── SST extra wave period ─────────────────────── */
+.sst-extra {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  margin-top: 3px;
+  margin-bottom: 2px;
+}
+
+@media (max-width: 900px) {
+  .wx-live-grid { grid-template-columns: repeat(3, 1fr); }
+  .aq-live-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 600px) {
+  .wx-live-grid { grid-template-columns: repeat(2, 1fr); }
+  .aq-live-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+
 .save-toast {
   position: fixed;
   bottom: 24px; right: 24px;
