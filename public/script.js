@@ -161,7 +161,7 @@ async function fetchOceanAirData() {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 8000); // 8s timeout
     const url = `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${pt.lat}&longitude=${pt.lon}` +
-      `&current=pm2_5,carbon_monoxide,nitrogen_dioxide,ozone,dust,uv_index&timezone=UTC`;
+      `&current=pm2_5,nitrogen_dioxide,ozone,uv_index&timezone=UTC`;
     const res = await fetch(url, { signal: controller.signal });
     clearTimeout(timeout);
     if (!res.ok) throw new Error('AQ failed');
@@ -1241,482 +1241,154 @@ function initFishStockChart() {
    11. INTERACTIVE OCEAN MAP (Canvas 2D — Geographic)
    ══════════════════════════════════════════════════ */
 
+/* ══════════════════════════════════════════════════
+   11. LEAFLET MAP — CartoDB Dark Matter
+   Real world tiles, precise geography
+   ══════════════════════════════════════════════════ */
+
 const MAP_LAYERS = {
   plastic: {
     title: 'Мусорные пятна и концентрации пластика',
     points: [
-      { x: 0.18, y: 0.38, r: 28, label: 'Большое тихоокеанское\nмусорное пятно', info: 'Площадь: ~1,6 млн км²\n1,8 трлн частиц пластика\nКрупнейшее в мире', severity: 'critical' },
-      { x: 0.05, y: 0.38, r: 16, label: 'Западное тихоокеанское\nпятно', info: 'Площадь: ~600 тыс км²\nМикропластик доминирует', severity: 'danger' },
-      { x: 0.52, y: 0.32, r: 14, label: 'Северо-Атлантическое\nпятно', info: '7000 мкп/м³\nGlossy plastics: 90%', severity: 'danger' },
-      { x: 0.52, y: 0.6,  r: 10, label: 'Южно-Атлантическое\nпятно', info: 'Быстро растёт\nДанные обновляются', severity: 'warning' },
-      { x: 0.68, y: 0.48, r: 12, label: 'Индийского океана\nпятно', info: 'Площадь: ~500 тыс км²', severity: 'warning' },
+      { lat:  30.0, lng: -140.0, r: 38, label: 'Большое тихоокеанское мусорное пятно',  info: 'Площадь: ~1,6 млн км²\n1,8 трлн частиц пластика\nКрупнейшее в мире', severity: 'critical' },
+      { lat:  38.0, lng:  160.0, r: 22, label: 'Западное тихоокеанское пятно',           info: 'Площадь: ~600 тыс км²\nМикропластик доминирует', severity: 'danger' },
+      { lat:  30.0, lng:  -40.0, r: 20, label: 'Северо-Атлантическое пятно',             info: '7000 мкп/м³\n90% — глянцевый пластик', severity: 'danger' },
+      { lat: -30.0, lng:  -30.0, r: 14, label: 'Южно-Атлантическое пятно',               info: 'Быстро растёт\nДанные уточняются', severity: 'warning' },
+      { lat: -30.0, lng:   80.0, r: 16, label: 'Индийского океана мусорное пятно',       info: 'Площадь: ~500 тыс км²', severity: 'warning' },
     ]
   },
   deadzones: {
     title: 'Мёртвые зоны — области гипоксии',
     points: [
-      { x: 0.537, y: 0.245, r: 8, label: 'Балтийское море', info: 'Крупнейшая мёртвая зона\nЕвропы\nPO₂ < 2 мг/л', severity: 'critical' },
-      { x: 0.38, y: 0.34,  r: 10, label: 'Мексиканский залив', info: '6705 миль² площадь\nЕжегодно расширяется', severity: 'critical' },
-      { x: 0.84, y: 0.315, r: 7, label: 'Бохайский залив (Китай)', info: 'Быстрый рост из-за\nпромышленных стоков', severity: 'danger' },
-      { x: 0.545, y: 0.275, r: 6, label: 'Северное море', info: 'Высокая нагрузка\nПитательные вещества', severity: 'danger' },
-      { x: 0.565, y: 0.285, r: 6, label: 'Чёрное море', info: 'Хроническая гипоксия\nС 1970-х годов', severity: 'warning' },
-      { x: 0.68, y: 0.34, r: 5, label: 'Аравийское море', info: 'Расширяется из-за\nпотепления', severity: 'warning' },
+      { lat:  57.0, lng:  19.0, r: 14, label: 'Балтийское море',        info: 'Крупнейшая мёртвая зона Европы\nPO₂ < 2 мг/л', severity: 'critical' },
+      { lat:  29.0, lng: -90.0, r: 18, label: 'Мексиканский залив',     info: '6705 миль² площадь\nЕжегодно расширяется', severity: 'critical' },
+      { lat:  38.5, lng: 120.5, r: 12, label: 'Бохайский залив (Китай)',info: 'Промышленные стоки\nБыстро растёт', severity: 'danger' },
+      { lat:  55.0, lng:   4.0, r: 10, label: 'Северное море',          info: 'Высокая нутриентная нагрузка', severity: 'danger' },
+      { lat:  43.0, lng:  34.0, r: 10, label: 'Чёрное море',            info: 'Хроническая гипоксия с 1970-х', severity: 'warning' },
+      { lat:  18.0, lng:  58.0, r:  9, label: 'Аравийское море',        info: 'Расширяется из-за потепления', severity: 'warning' },
     ]
   },
   temp: {
     title: 'Аномалии температуры поверхности (2024)',
     points: [
-      { x: 0.48, y: 0.46, r: 20, label: 'Тропическая Атлантика +2.3°C', info: 'Максимум 2024 года\nМассовое обесцвечивание', severity: 'critical' },
-      { x: 0.54, y: 0.30, r: 14, label: 'Средиземноморье +2.1°C', info: 'Рекорд температуры 2024\nКритическое состояние', severity: 'critical' },
-      { x: 0.30, y: 0.80, r: 16, label: 'Южный океан +2.0°C', info: 'Ледовый щит тает\nПоследствия для течений', severity: 'danger' },
-      { x: 0.55, y: 0.09, r: 18, label: 'Арктика +3.5°C', info: 'Самый быстрый нагрев\nМорской лёд −12%/дес.', severity: 'critical' },
-      { x: 0.73, y: 0.42, r: 12, label: 'Индийский океан +1.8°C', info: 'Кораллы под угрозой\nВыше нормы с 2000 г.', severity: 'danger' },
+      { lat:  10.0, lng:  -30.0, r: 28, label: 'Тропическая Атлантика +2.3°C', info: 'Рекорд 2024\nМассовое обесцвечивание', severity: 'critical' },
+      { lat:  38.0, lng:   18.0, r: 22, label: 'Средиземноморье +2.1°C',       info: 'Рекорд температуры 2024', severity: 'critical' },
+      { lat: -55.0, lng:    0.0, r: 24, label: 'Южный океан +2.0°C',           info: 'Ледяной щит тает\nВлияние на течения', severity: 'danger' },
+      { lat:  82.0, lng:    0.0, r: 26, label: 'Арктика +3.5°C',               info: 'Морской лёд −12%/дес.\nНаибольший нагрев', severity: 'critical' },
+      { lat: -20.0, lng:   70.0, r: 18, label: 'Индийский океан +1.8°C',       info: 'Выше нормы с 2000 г.', severity: 'danger' },
     ]
   },
   coral: {
     title: 'Состояние коралловых рифов',
     points: [
-      { x: 0.855, y: 0.535, r: 16, label: 'Большой Барьерный риф', info: 'Критическое обесцвечивание\n2024: 6-й эпизод за 9 лет\n75% поражено', severity: 'critical' },
-      { x: 0.80, y: 0.40, r: 12, label: 'Коралловый треугольник', info: 'Наибольшее биоразнообразие\n30% поверхности поражено', severity: 'danger' },
-      { x: 0.43, y: 0.38, r: 10, label: 'Карибские рифы', info: '50% утрачено с 1970-х\nЧёрные морские ежи вымерли', severity: 'critical' },
-      { x: 0.66, y: 0.385, r: 9, label: 'Мальдивы / Индийский', info: 'Повторяющееся обесцвечивание\nТуризм под угрозой', severity: 'danger' },
-      { x: 0.18, y: 0.38, r: 8, label: 'Гавайи', info: 'Умеренное восстановление\nМПА показывают результат', severity: 'warning' },
-      { x: 0.41, y: 0.355, r: 7, label: 'Флорида Кис', info: 'Мрачный прогноз к 2030\n90% кораллов под угрозой', severity: 'critical' },
+      { lat: -18.0, lng: 147.0, r: 24, label: 'Большой Барьерный риф',    info: '6-й эпизод обесцвечивания за 9 лет\n75% поражено', severity: 'critical' },
+      { lat:   2.0, lng: 124.0, r: 18, label: 'Коралловый треугольник',   info: 'Наибольшее биоразнообразие\n30% поражено', severity: 'danger' },
+      { lat:  17.0, lng: -67.0, r: 16, label: 'Карибские рифы',           info: '50% утрачено с 1970-х', severity: 'critical' },
+      { lat:   4.0, lng:  73.0, r: 14, label: 'Мальдивы / Индийский',     info: 'Повторяющееся обесцвечивание', severity: 'danger' },
+      { lat:  21.0, lng:-157.0, r: 12, label: 'Гавайи',                   info: 'Умеренное восстановление', severity: 'warning' },
+      { lat:  24.5, lng: -81.5, r: 11, label: 'Флорида Кис',              info: '90% кораллов под угрозой к 2030', severity: 'critical' },
     ]
   }
 };
 
+let leafletMap     = null;
+let markersLayer   = null;
 let currentMapLayer = 'plastic';
-let hoveredPoint = null;
 
 function severityColor(s) {
-  return { critical: '#e63946', danger: '#f4a261', warning: '#e9c46a', moderate: '#2a9d8f' }[s] || '#2a9d8f';
+  return { critical:'#e63946', danger:'#f4a261', warning:'#e9c46a', moderate:'#2a9d8f' }[s] || '#2a9d8f';
 }
 
-// ══════════════════════════════════════════════════
-// PRECISE WORLD MAP — Natural Earth 110m simplified
-// Projection: Equirectangular
-//   x = (longitude + 180) / 360
-//   y = (90 − latitude)  / 180
-// Points hand-traced from Natural Earth dataset
-// ══════════════════════════════════════════════════
-const CONTINENTS = {
-
-  northAmerica: { color:'#1a3248', stroke:'rgba(42,157,143,0.65)', points:[
-    // Alaska
-    [0.055,0.178],[0.068,0.162],[0.078,0.155],[0.088,0.160],[0.098,0.152],
-    [0.108,0.148],[0.115,0.155],[0.112,0.168],[0.102,0.172],[0.118,0.165],
-    [0.128,0.158],[0.138,0.162],[0.142,0.175],[0.148,0.185],[0.152,0.195],
-    // Canada west → east
-    [0.148,0.208],[0.150,0.225],[0.152,0.245],[0.154,0.268],[0.155,0.288],
-    [0.152,0.305],[0.148,0.320],[0.152,0.332],
-    // Mexico / Central America south tip
-    [0.158,0.345],[0.162,0.360],[0.165,0.375],[0.168,0.390],[0.168,0.402],
-    [0.175,0.410],[0.182,0.418],[0.190,0.424],[0.198,0.428],[0.205,0.425],
-    [0.212,0.420],[0.218,0.412],[0.225,0.408],
-    // Gulf of Mexico coastline
-    [0.232,0.410],[0.240,0.408],[0.248,0.405],[0.258,0.398],[0.268,0.390],
-    [0.278,0.380],[0.288,0.370],[0.298,0.358],[0.308,0.345],[0.315,0.335],
-    [0.325,0.325],[0.335,0.315],[0.342,0.305],[0.348,0.295],[0.355,0.285],
-    // East coast USA
-    [0.360,0.272],[0.362,0.258],[0.360,0.245],[0.358,0.232],[0.358,0.218],
-    [0.355,0.205],[0.352,0.192],[0.355,0.178],[0.362,0.165],[0.370,0.158],
-    [0.378,0.150],[0.385,0.142],[0.392,0.135],[0.398,0.128],
-    // Maritime Canada / Labrador
-    [0.395,0.118],[0.388,0.110],[0.380,0.104],[0.368,0.098],[0.355,0.093],
-    [0.340,0.088],[0.325,0.085],[0.310,0.082],[0.295,0.078],[0.280,0.072],
-    [0.265,0.065],[0.250,0.060],[0.235,0.056],[0.222,0.055],[0.208,0.058],
-    [0.198,0.065],[0.192,0.075],[0.188,0.088],[0.185,0.102],[0.180,0.115],
-    [0.172,0.128],[0.162,0.138],[0.150,0.145],[0.138,0.150],[0.125,0.152],
-    [0.112,0.150],[0.100,0.148],[0.088,0.148],[0.075,0.148],[0.065,0.152],
-    [0.055,0.158],[0.048,0.165],[0.050,0.175],
-  ]},
-
-  greenland: { color:'#162e42', stroke:'rgba(42,157,143,0.45)', points:[
-    [0.340,0.042],[0.355,0.034],[0.372,0.028],[0.388,0.025],[0.404,0.026],
-    [0.418,0.032],[0.428,0.042],[0.432,0.055],[0.428,0.068],[0.418,0.080],
-    [0.405,0.089],[0.390,0.094],[0.374,0.095],[0.358,0.092],[0.345,0.085],
-    [0.335,0.074],[0.332,0.062],[0.335,0.050],
-  ]},
-
-  iceland: { color:'#1a3248', stroke:'rgba(42,157,143,0.5)', points:[
-    [0.456,0.076],[0.462,0.069],[0.470,0.065],[0.478,0.063],[0.485,0.066],
-    [0.489,0.074],[0.487,0.082],[0.480,0.088],[0.472,0.090],[0.463,0.086],
-  ]},
-
-  southAmerica: { color:'#1a3248', stroke:'rgba(42,157,143,0.65)', points:[
-    [0.260,0.418],[0.270,0.410],[0.280,0.404],[0.292,0.399],[0.305,0.396],
-    [0.318,0.393],[0.328,0.390],[0.338,0.386],[0.345,0.394],[0.350,0.404],
-    [0.354,0.416],[0.358,0.430],[0.360,0.445],[0.362,0.462],[0.362,0.480],
-    [0.360,0.498],[0.356,0.516],[0.350,0.534],[0.343,0.552],[0.334,0.569],
-    [0.323,0.585],[0.311,0.600],[0.300,0.612],[0.290,0.622],[0.281,0.628],
-    [0.272,0.626],[0.265,0.618],[0.260,0.606],[0.257,0.592],[0.256,0.576],
-    [0.256,0.559],[0.258,0.540],[0.260,0.522],[0.261,0.502],[0.261,0.482],
-    [0.259,0.462],[0.256,0.443],[0.254,0.432],[0.252,0.422],
-  ]},
-
-  europe: { color:'#1a3248', stroke:'rgba(42,157,143,0.65)', points:[
-    // Iberia
-    [0.450,0.195],[0.456,0.185],[0.462,0.178],[0.470,0.172],[0.480,0.168],
-    [0.490,0.165],[0.500,0.164],[0.508,0.167],[0.514,0.174],[0.516,0.184],
-    [0.514,0.195],[0.509,0.205],[0.502,0.212],[0.494,0.216],[0.484,0.216],
-    [0.474,0.212],[0.465,0.205],
-    // France
-    [0.468,0.198],[0.464,0.188],[0.468,0.178],[0.476,0.170],[0.485,0.162],
-    [0.494,0.156],[0.504,0.150],[0.514,0.148],[0.524,0.148],[0.532,0.150],
-    [0.540,0.155],[0.546,0.162],[0.549,0.170],[0.549,0.180],
-    // UK (simplified)
-    [0.482,0.150],[0.476,0.140],[0.473,0.130],[0.474,0.120],[0.477,0.110],
-    [0.483,0.103],[0.489,0.100],[0.493,0.108],[0.493,0.118],[0.490,0.128],
-    [0.487,0.138],[0.484,0.148],
-    // Norway / Scandinavia
-    [0.530,0.148],[0.526,0.138],[0.522,0.128],[0.518,0.118],[0.516,0.108],
-    [0.516,0.098],[0.518,0.088],[0.522,0.080],[0.528,0.074],[0.535,0.070],
-    [0.542,0.070],[0.549,0.074],[0.554,0.082],[0.556,0.092],[0.555,0.102],
-    [0.552,0.112],[0.548,0.122],[0.545,0.132],[0.542,0.140],
-    // Finland/Baltic
-    [0.552,0.118],[0.558,0.108],[0.564,0.098],[0.570,0.088],[0.574,0.078],
-    [0.576,0.068],[0.576,0.058],[0.572,0.050],[0.565,0.045],[0.556,0.044],
-    [0.548,0.046],[0.542,0.052],
-    // Balkans/Turkey approach
-    [0.549,0.172],[0.550,0.182],[0.548,0.192],[0.544,0.200],
-    [0.540,0.208],[0.535,0.215],[0.528,0.220],[0.520,0.222],[0.512,0.220],
-    [0.504,0.215],[0.498,0.208],[0.493,0.200],[0.490,0.192],
-  ]},
-
-  africa: { color:'#1a3248', stroke:'rgba(42,157,143,0.65)', points:[
-    [0.452,0.214],[0.460,0.206],[0.470,0.200],[0.480,0.196],[0.492,0.192],
-    [0.504,0.190],[0.516,0.190],[0.527,0.192],[0.538,0.197],[0.546,0.204],
-    [0.550,0.214],[0.552,0.226],[0.551,0.240],[0.549,0.256],[0.546,0.272],
-    [0.543,0.290],[0.540,0.308],[0.539,0.328],[0.538,0.348],[0.537,0.368],
-    [0.535,0.388],[0.532,0.408],[0.527,0.428],[0.520,0.446],[0.512,0.462],
-    [0.502,0.478],[0.492,0.492],[0.482,0.504],[0.472,0.514],[0.464,0.520],
-    [0.458,0.524],[0.453,0.522],[0.448,0.514],[0.445,0.502],[0.443,0.488],
-    [0.442,0.472],[0.443,0.455],[0.444,0.438],[0.446,0.420],[0.447,0.402],
-    [0.448,0.384],[0.448,0.366],[0.448,0.348],[0.448,0.330],[0.448,0.312],
-    [0.449,0.293],[0.450,0.274],[0.451,0.255],[0.451,0.236],[0.452,0.222],
-    // Madagascar
-  ]},
-
-  madagascar: { color:'#1a3248', stroke:'rgba(42,157,143,0.45)', points:[
-    [0.558,0.438],[0.562,0.428],[0.566,0.420],[0.570,0.416],[0.574,0.420],
-    [0.576,0.432],[0.574,0.445],[0.569,0.457],[0.562,0.464],[0.556,0.460],
-    [0.555,0.448],
-  ]},
-
-  // Eurasia merged as Asia (big blob)
-  asia: { color:'#1a3248', stroke:'rgba(42,157,143,0.65)', points:[
-    // Turkey / Anatolia west
-    [0.550,0.224],[0.558,0.218],[0.568,0.212],[0.578,0.208],[0.590,0.204],
-    [0.602,0.202],[0.614,0.202],[0.624,0.205],[0.632,0.212],[0.636,0.222],
-    // Middle East / Arabian pen. entry
-    [0.638,0.235],[0.640,0.250],[0.644,0.265],[0.650,0.278],[0.656,0.290],
-    [0.662,0.300],[0.668,0.308],[0.674,0.315],[0.680,0.318],[0.686,0.314],
-    [0.690,0.306],[0.692,0.295],[0.692,0.282],[0.688,0.268],[0.683,0.255],
-    [0.677,0.242],[0.671,0.230],[0.665,0.218],[0.660,0.208],[0.656,0.198],
-    [0.652,0.190],[0.650,0.182],
-    // Iran / Persia
-    [0.652,0.174],[0.660,0.166],[0.670,0.158],[0.682,0.152],[0.694,0.146],
-    [0.706,0.142],[0.720,0.138],[0.734,0.136],[0.748,0.136],[0.762,0.138],
-    // Central Asia / Siberia
-    [0.774,0.142],[0.786,0.148],[0.796,0.155],[0.804,0.162],[0.810,0.170],
-    [0.814,0.165],[0.820,0.155],[0.826,0.142],[0.830,0.128],[0.832,0.114],
-    [0.830,0.100],[0.826,0.086],[0.818,0.074],[0.808,0.064],[0.796,0.056],
-    [0.780,0.050],[0.764,0.045],[0.746,0.042],[0.728,0.041],[0.710,0.043],
-    [0.692,0.045],[0.674,0.048],[0.656,0.052],[0.638,0.056],[0.620,0.060],
-    [0.603,0.064],[0.587,0.068],[0.573,0.074],[0.561,0.082],[0.552,0.092],
-    [0.548,0.104],[0.547,0.118],[0.547,0.132],[0.548,0.146],[0.548,0.160],
-    [0.549,0.172],[0.550,0.184],[0.549,0.196],[0.548,0.208],[0.548,0.220],
-    // East Asian coastline
-    [0.820,0.158],[0.824,0.170],[0.826,0.184],[0.824,0.198],[0.820,0.212],
-    [0.814,0.225],[0.806,0.236],[0.795,0.246],[0.783,0.254],[0.770,0.260],
-    [0.758,0.264],[0.746,0.265],[0.734,0.264],[0.722,0.260],[0.710,0.254],
-    [0.700,0.246],[0.691,0.237],[0.684,0.226],[0.678,0.214],[0.672,0.202],
-    // Indochina / SE Asia coast
-    [0.762,0.270],[0.770,0.282],[0.776,0.295],[0.780,0.308],[0.781,0.322],
-    [0.778,0.336],[0.773,0.348],[0.765,0.358],[0.756,0.365],[0.746,0.368],
-    [0.736,0.368],[0.726,0.364],[0.718,0.356],[0.712,0.345],[0.709,0.332],
-    [0.709,0.318],[0.712,0.305],[0.718,0.293],[0.726,0.281],[0.736,0.272],
-    [0.746,0.266],
-  ]},
-
-  india: { color:'#1a3248', stroke:'rgba(42,157,143,0.6)', points:[
-    [0.638,0.208],[0.645,0.218],[0.652,0.230],[0.658,0.244],[0.662,0.258],
-    [0.664,0.274],[0.663,0.290],[0.658,0.306],[0.650,0.320],[0.640,0.332],
-    [0.630,0.340],[0.620,0.344],[0.612,0.340],[0.606,0.330],[0.602,0.316],
-    [0.600,0.301],[0.601,0.286],[0.604,0.271],[0.608,0.256],[0.613,0.243],
-    [0.618,0.231],[0.624,0.220],[0.630,0.212],
-  ]},
-
-  sriLanka: { color:'#1a3248', stroke:'rgba(42,157,143,0.4)', points:[
-    [0.628,0.349],[0.631,0.344],[0.635,0.342],[0.638,0.345],[0.639,0.351],
-    [0.636,0.356],[0.631,0.357],[0.628,0.353],
-  ]},
-
-  australia: { color:'#1a3248', stroke:'rgba(42,157,143,0.65)', points:[
-    [0.770,0.500],[0.782,0.490],[0.796,0.482],[0.812,0.476],[0.828,0.474],
-    [0.844,0.474],[0.858,0.478],[0.870,0.486],[0.880,0.498],[0.886,0.512],
-    [0.888,0.528],[0.886,0.544],[0.880,0.560],[0.871,0.574],[0.859,0.584],
-    [0.845,0.591],[0.830,0.594],[0.815,0.591],[0.801,0.584],[0.789,0.572],
-    [0.780,0.558],[0.773,0.542],[0.768,0.526],[0.766,0.510],
-  ]},
-
-  newZealandN: { color:'#1a3248', stroke:'rgba(42,157,143,0.45)', points:[
-    [0.905,0.541],[0.910,0.534],[0.916,0.530],[0.921,0.532],[0.924,0.540],
-    [0.922,0.550],[0.916,0.556],[0.910,0.554],[0.906,0.547],
-  ]},
-
-  newZealandS: { color:'#1a3248', stroke:'rgba(42,157,143,0.45)', points:[
-    [0.903,0.558],[0.908,0.552],[0.914,0.549],[0.920,0.551],[0.924,0.558],
-    [0.924,0.568],[0.919,0.576],[0.912,0.580],[0.905,0.577],[0.902,0.568],
-  ]},
-
-  japan: { color:'#1a3248', stroke:'rgba(42,157,143,0.45)', points:[
-    [0.838,0.165],[0.843,0.158],[0.849,0.152],[0.856,0.150],[0.861,0.155],
-    [0.862,0.164],[0.858,0.172],[0.852,0.177],[0.844,0.175],[0.839,0.170],
-  ]},
-
-  borneo: { color:'#1a3248', stroke:'rgba(42,157,143,0.45)', points:[
-    [0.790,0.330],[0.798,0.322],[0.806,0.318],[0.815,0.318],[0.822,0.324],
-    [0.826,0.333],[0.824,0.344],[0.818,0.354],[0.809,0.360],[0.800,0.360],
-    [0.792,0.354],[0.788,0.344],[0.788,0.336],
-  ]},
-
-  sumatra: { color:'#1a3248', stroke:'rgba(42,157,143,0.45)', points:[
-    [0.710,0.338],[0.718,0.332],[0.728,0.328],[0.738,0.330],[0.745,0.338],
-    [0.748,0.348],[0.745,0.358],[0.738,0.364],[0.728,0.366],[0.720,0.362],
-    [0.713,0.354],[0.710,0.346],
-  ]},
-
-  antarcticaShape: { color:'#162e42', stroke:'rgba(42,157,143,0.35)', points:[
-    [0.000,0.860],[0.050,0.854],[0.100,0.850],[0.150,0.847],[0.200,0.845],
-    [0.250,0.846],[0.300,0.848],[0.350,0.848],[0.400,0.846],[0.450,0.843],
-    [0.500,0.842],[0.550,0.843],[0.600,0.846],[0.650,0.848],[0.700,0.847],
-    [0.750,0.845],[0.800,0.845],[0.850,0.847],[0.900,0.850],[0.950,0.854],
-    [1.000,0.858],[1.000,1.000],[0.000,1.000],
-  ]},
-};
-
-
-// ── OCEAN LABELS ───────────────────────────────────────────────────
-const OCEAN_LABELS = [
-  { x: 0.13,  y: 0.38, name: 'ТИХИЙ ОКЕАН',     sub: '(Северный)',  size: 13, alpha: 0.55 },
-  { x: 0.13,  y: 0.62, name: 'ТИХИЙ ОКЕАН',     sub: '(Южный)',     size: 13, alpha: 0.55 },
-  { x: 0.48,  y: 0.50, name: 'АТЛАНТИЧЕСКИЙ',   sub: 'ОКЕАН',       size: 12, alpha: 0.55 },
-  { x: 0.70,  y: 0.50, name: 'ИНДИЙСКИЙ',        sub: 'ОКЕАН',       size: 12, alpha: 0.55 },
-  { x: 0.50,  y: 0.09, name: 'СЕВЕРНЫЙ ЛЕДОВИТЫЙ', sub: 'ОКЕАН',    size: 10, alpha: 0.5  },
-  { x: 0.50,  y: 0.80, name: 'ЮЖНЫЙ ОКЕАН',      sub: '',            size: 11, alpha: 0.5  },
-];
-
-function drawContinent(ctx, pts, W, H, fillColor, strokeColor, closed = true) {
-  if (pts.length < 2) return;
-  ctx.beginPath();
-  ctx.moveTo(pts[0][0] * W, pts[0][1] * H);
-  // Catmull-Rom-like smooth curve
-  for (let i = 1; i < pts.length - 1; i++) {
-    const xc = (pts[i][0] + pts[i + 1][0]) / 2 * W;
-    const yc = (pts[i][1] + pts[i + 1][1]) / 2 * H;
-    ctx.quadraticCurveTo(pts[i][0] * W, pts[i][1] * H, xc, yc);
-  }
-  ctx.lineTo(pts[pts.length - 1][0] * W, pts[pts.length - 1][1] * H);
-  if (closed) ctx.closePath();
-  ctx.fillStyle = fillColor;
-  ctx.fill();
-  ctx.strokeStyle = strokeColor;
-  ctx.lineWidth = 1.2;
-  ctx.stroke();
+function severityFill(s) {
+  return { critical:'rgba(230,57,70,0.22)', danger:'rgba(244,162,97,0.2)', warning:'rgba(233,196,106,0.18)', moderate:'rgba(42,157,143,0.18)' }[s] || 'rgba(42,157,143,0.18)';
 }
 
-function drawOceanLabels(ctx, W, H) {
-  OCEAN_LABELS.forEach(ol => {
-    const x = ol.x * W, y = ol.y * H;
-    ctx.save();
-    ctx.globalAlpha = ol.alpha;
-    ctx.font = `600 ${Math.round(ol.size * W / 900)}px IBM Plex Mono, monospace`;
-    ctx.fillStyle = '#2a9d8f';
-    ctx.textAlign = 'center';
-    ctx.letterSpacing = '0.12em';
-    ctx.fillText(ol.name, x, y);
-    if (ol.sub) {
-      ctx.font = `400 ${Math.round((ol.size - 2) * W / 900)}px IBM Plex Mono, monospace`;
-      ctx.fillText(ol.sub, x, y + Math.round(16 * W / 900));
-    }
-    ctx.globalAlpha = 1;
-    ctx.restore();
-  });
-}
+function initLeafletMap() {
+  if (leafletMap) return; // already init
 
-function drawOceanGrid(ctx, W, H) {
-  // Latitude lines
-  ctx.strokeStyle = 'rgba(42,157,143,0.06)';
-  ctx.lineWidth = 1;
-  for (let i = 1; i < 8; i++) {
-    const y = H * i / 8;
-    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
-  }
-  // Longitude lines
-  for (let i = 1; i < 12; i++) {
-    const x = W * i / 12;
-    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
-  }
-  // Equator line
-  ctx.strokeStyle = 'rgba(42,157,143,0.15)';
-  ctx.lineWidth = 1;
-  ctx.setLineDash([6, 6]);
-  ctx.beginPath(); ctx.moveTo(0, H * 0.44); ctx.lineTo(W, H * 0.44); ctx.stroke();
-  ctx.setLineDash([]);
-  // Equator label
-  ctx.font = `500 ${Math.round(9 * W / 900)}px IBM Plex Mono, monospace`;
-  ctx.fillStyle = 'rgba(42,157,143,0.35)';
-  ctx.textAlign = 'left';
-  ctx.fillText('ЭКВАТОР', 6, H * 0.44 - 3);
-}
+  const container = document.getElementById('leafletMap');
+  if (!container) return;
 
-function drawOceanMap(canvas, layer) {
-  const ctx = canvas.getContext('2d');
-  const W = canvas.width, H = canvas.height;
-  ctx.clearRect(0, 0, W, H);
-
-  // Ocean background gradient
-  const bg = ctx.createLinearGradient(0, 0, W, H);
-  bg.addColorStop(0,   '#091520');
-  bg.addColorStop(0.5, '#0c1d2b');
-  bg.addColorStop(1,   '#0a1820');
-  ctx.fillStyle = bg;
-  ctx.fillRect(0, 0, W, H);
-
-  // Subtle vignette
-  const vig = ctx.createRadialGradient(W/2, H/2, H*0.3, W/2, H/2, H*0.9);
-  vig.addColorStop(0, 'transparent');
-  vig.addColorStop(1, 'rgba(0,0,0,0.35)');
-  ctx.fillStyle = vig;
-  ctx.fillRect(0, 0, W, H);
-
-  // Grid
-  drawOceanGrid(ctx, W, H);
-
-  // Draw all continents
-  Object.values(CONTINENTS).forEach(c => {
-    drawContinent(ctx, c.points, W, H, c.color, c.stroke);
+  // Create map — world view, no scroll zoom initially
+  leafletMap = L.map('leafletMap', {
+    center:          [20, 10],
+    zoom:            2,
+    minZoom:         2,
+    maxZoom:         8,
+    scrollWheelZoom: true,
+    zoomControl:     true,
+    attributionControl: true,
   });
 
-  // Ocean name labels
-  drawOceanLabels(ctx, W, H);
+  // CartoDB Dark Matter tiles — dark ocean, perfect colour match
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors © <a href="https://carto.com/attributions">CARTO</a>',
+    subdomains:  'abcd',
+    maxZoom:     19,
+  }).addTo(leafletMap);
 
-  // Draw data points for current layer
-  const layerData = MAP_LAYERS[layer];
-  layerData.points.forEach((pt, i) => {
-    const px = pt.x * W;
-    const py = pt.y * H;
-    const col = severityColor(pt.severity);
-    const isHovered = hoveredPoint === i;
-    const r = isHovered ? pt.r * 1.35 : pt.r;
-    const rPx = r * W / 900;
+  // Markers group
+  markersLayer = L.layerGroup().addTo(leafletMap);
 
-    // Outer glow
-    const grd = ctx.createRadialGradient(px, py, 0, px, py, rPx * 3);
-    grd.addColorStop(0, col + '55');
-    grd.addColorStop(1, 'transparent');
-    ctx.beginPath();
-    ctx.arc(px, py, rPx * 3, 0, Math.PI * 2);
-    ctx.fillStyle = grd;
-    ctx.fill();
+  renderMapLayer(currentMapLayer);
+}
 
-    // Circle fill
-    ctx.beginPath();
-    ctx.arc(px, py, rPx, 0, Math.PI * 2);
-    ctx.fillStyle = col + '40';
-    ctx.fill();
+function renderMapLayer(layerKey) {
+  if (!leafletMap || !markersLayer) return;
+  markersLayer.clearLayers();
 
-    // Circle stroke
-    ctx.strokeStyle = col;
-    ctx.lineWidth = isHovered ? 2.2 : 1.5;
-    ctx.stroke();
+  const layerData = MAP_LAYERS[layerKey];
 
-    // Center dot
-    ctx.beginPath();
-    ctx.arc(px, py, Math.max(2.5, rPx * 0.18), 0, Math.PI * 2);
-    ctx.fillStyle = col;
-    ctx.fill();
+  layerData.points.forEach(pt => {
+    const col  = severityColor(pt.severity);
+    const fill = severityFill(pt.severity);
+    const r    = pt.r;
+
+    // Outer glow circle
+    const glowCircle = L.circle([pt.lat, pt.lng], {
+      radius:      r * 18000,   // metres
+      color:       col,
+      weight:      1,
+      opacity:     0.5,
+      fillColor:   fill,
+      fillOpacity: 0.35,
+    }).addTo(markersLayer);
+
+    // Inner marker circle
+    const icon = L.divIcon({
+      className: '',
+      html: `<div style="
+        width:${Math.max(10, r/2)}px;
+        height:${Math.max(10, r/2)}px;
+        border-radius:50%;
+        background:${col};
+        border:2px solid ${col};
+        box-shadow:0 0 ${r}px ${col}88, 0 0 ${r*2}px ${col}44;
+        opacity:0.9;
+      "></div>`,
+      iconAnchor: [Math.max(5, r/4), Math.max(5, r/4)],
+    });
+
+    const marker = L.marker([pt.lat, pt.lng], { icon })
+      .addTo(markersLayer)
+      .bindPopup(`
+        <div class="lf-popup">
+          <div class="lf-popup-title" style="color:${col}">${pt.label}</div>
+          <div class="lf-popup-body">${pt.info.replace(/\n/g,'<br>')}</div>
+          <div class="lf-popup-sev">${pt.severity.toUpperCase()}</div>
+        </div>
+      `, {
+        className:   'lf-custom-popup',
+        maxWidth:    240,
+        closeButton: true,
+      });
   });
-
-  // Layer title
-  ctx.fillStyle = 'rgba(42,157,143,0.7)';
-  ctx.font = `600 ${Math.round(11 * W / 900)}px IBM Plex Mono, monospace`;
-  ctx.textAlign = 'left';
-  ctx.fillText('● ' + layerData.title, 14, H - 12);
 }
 
 function initOceanMap() {
-  const canvas = document.getElementById('oceanMapCanvas');
-  if (!canvas) return;
-
-  function resize() {
-    const container = canvas.parentElement;
-    canvas.width = container.clientWidth;
-    canvas.height = Math.round(container.clientWidth * 0.52);
-    canvas.style.height = canvas.height + 'px';
-    drawOceanMap(canvas, currentMapLayer);
-  }
-
-  resize();
-  window.addEventListener('resize', resize);
-
-  // Map layer buttons
-  document.querySelectorAll('.map-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('.map-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      currentMapLayer = btn.dataset.layer;
-      hoveredPoint = null;
-      drawOceanMap(canvas, currentMapLayer);
-    });
-  });
-
-  // Hover interaction
-  canvas.addEventListener('mousemove', (e) => {
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
-    const mx = (e.clientX - rect.left) * scaleX;
-    const my = (e.clientY - rect.top) * scaleY;
-    const W = canvas.width, H = canvas.height;
-    const points = MAP_LAYERS[currentMapLayer].points;
-    const tooltip = document.getElementById('mapTooltip');
-
-    let found = null;
-    points.forEach((pt, i) => {
-      const px = pt.x * W, py = pt.y * H;
-      const r = pt.r * W / 900;
-      if (Math.hypot(mx - px, my - py) < r * 2) found = i;
-    });
-
-    if (found !== hoveredPoint) {
-      hoveredPoint = found;
-      canvas.style.cursor = found !== null ? 'pointer' : 'default';
-      drawOceanMap(canvas, currentMapLayer);
-    }
-
-    if (found !== null) {
-      const pt = points[found];
-      tooltip.style.display = 'block';
-      tooltip.style.left = (e.clientX - rect.left + 18) + 'px';
-      tooltip.style.top  = (e.clientY - rect.top  - 10) + 'px';
-      tooltip.innerHTML = `
-        <strong style="color:${severityColor(pt.severity)}">${pt.label.replace('\n','<br>')}</strong>
-        <div style="margin-top:6px;font-size:.75rem;line-height:1.55;">${pt.info.replace(/\n/g,'<br>')}</div>
-      `;
-    } else {
-      tooltip.style.display = 'none';
-    }
-  });
-
-  canvas.addEventListener('mouseleave', () => {
-    hoveredPoint = null;
-    document.getElementById('mapTooltip').style.display = 'none';
-    drawOceanMap(canvas, currentMapLayer);
-  });
+  initLeafletMap();
 }
+
 
 /* ══════════════════════════════════════════════════
    12. SIMULATE LIVE DATA UPDATES
@@ -1911,7 +1583,7 @@ function renderAdmMap() {
     </div>
   `).join('');
 
-  const update = () => { if(document.getElementById('map')?.classList.contains('active')) { const c = document.getElementById('oceanMapCanvas'); if(c) drawOceanMap(c, currentMapLayer); }};
+  const update = () => { renderMapLayer(currentMapLayer); };
   container.querySelectorAll('[data-mp-lbl]').forEach(el => el.addEventListener('input', e => { pts[+e.target.dataset.mpLbl].label = e.target.value; update(); }));
   container.querySelectorAll('[data-mp-info]').forEach(el => el.addEventListener('input', e => { pts[+e.target.dataset.mpInfo].info = e.target.value.replace(/ \| /g,'\n'); update(); }));
   container.querySelectorAll('[data-mp-x]').forEach(el => el.addEventListener('input', e => { pts[+e.target.dataset.mpX].x = parseFloat(e.target.value)||0; update(); }));
@@ -2032,8 +1704,7 @@ function initAdmin() {
   admMapLayer?.addEventListener('change', () => {
     currentMapLayer = admMapLayer.value;
     renderAdmMap();
-    const c = document.getElementById('oceanMapCanvas');
-    if (c) drawOceanMap(c, currentMapLayer);
+    renderMapLayer(currentMapLayer);
   });
 
   // Add ticker item
@@ -2047,8 +1718,7 @@ function initAdmin() {
     const layerKey = document.getElementById('admMapLayer')?.value || 'plastic';
     MAP_LAYERS[layerKey].points.push({ x: 0.5, y: 0.5, r: 12, label: 'Новая точка', info: 'Описание...', severity: 'warning' });
     renderAdmMap();
-    const c = document.getElementById('oceanMapCanvas');
-    if (c) drawOceanMap(c, currentMapLayer);
+    renderMapLayer(currentMapLayer);
   });
 }
 
@@ -2093,7 +1763,6 @@ document.addEventListener('DOMContentLoaded', () => {
   initFishStockChart();
 
   // Interactive map (lazy — runs when section becomes visible)
-  // Poll for map section visibility
   const mapObserver = new IntersectionObserver((entries) => {
     if (entries[0].isIntersecting) {
       initOceanMap();
@@ -2104,9 +1773,23 @@ document.addEventListener('DOMContentLoaded', () => {
   const mapSection = document.getElementById('map');
   if (mapSection) mapObserver.observe(mapSection);
 
-  // Also init map when nav clicked
+  // Nav click — init map
   document.querySelector('[data-section="map"]')?.addEventListener('click', () => {
-    setTimeout(initOceanMap, 50);
+    setTimeout(() => {
+      initOceanMap();
+      // Leaflet needs invalidateSize when container was hidden
+      if (leafletMap) setTimeout(() => leafletMap.invalidateSize(), 100);
+    }, 50);
+  });
+
+  // Map layer buttons — switch Leaflet markers
+  document.querySelectorAll('.map-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.map-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      currentMapLayer = btn.dataset.layer;
+      renderMapLayer(currentMapLayer);
+    });
   });
 
   // Live updates

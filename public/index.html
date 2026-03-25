@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>OceanWatch — Мониторинг экологического состояния Мирового океана</title>
   <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500;600&family=Playfair+Display:wght@700;900&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
@@ -597,7 +598,7 @@
       <div class="section-header">
         <div class="section-label"><i class="fas fa-map"></i> ИНТЕРАКТИВНАЯ КАРТА</div>
         <h2 class="section-title">Карта экологических угроз<br>Мирового океана</h2>
-        <p class="section-desc">Визуализация ключевых зон экологического стресса</p>
+        <p class="section-desc">Визуализация ключевых зон экологического стресса · Карта: © OpenStreetMap, © CARTO</p>
       </div>
 
       <div class="map-controls">
@@ -608,7 +609,7 @@
       </div>
 
       <div class="map-container" id="mapContainer">
-        <canvas id="oceanMapCanvas"></canvas>
+        <div id="leafletMap"></div>
         <div class="map-legend" id="mapLegend">
           <div class="legend-title">Легенда</div>
           <div class="legend-item"><span class="legend-dot critical"></span>Критическое</div>
@@ -616,7 +617,6 @@
           <div class="legend-item"><span class="legend-dot warning"></span>Умеренная</div>
           <div class="legend-item"><span class="legend-dot moderate"></span>Наблюдение</div>
         </div>
-        <div class="map-tooltip" id="mapTooltip"></div>
       </div>
     </section>
 
@@ -651,6 +651,7 @@
     </div>
   </footer>
 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
   <script src="script.js"></script>
 
   <!-- ═══════════ ADMIN LOGIN MODAL ═══════════ -->
