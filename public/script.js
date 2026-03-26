@@ -1304,12 +1304,11 @@ function severityFill(s) {
 }
 
 function initLeafletMap() {
-  if (leafletMap) return; // already init
+  if (leafletMap) return;
 
   const container = document.getElementById('leafletMap');
   if (!container) return;
 
-  // Create map — world view, no scroll zoom initially
   leafletMap = L.map('leafletMap', {
     center:          [20, 10],
     zoom:            2,
@@ -1320,14 +1319,80 @@ function initLeafletMap() {
     attributionControl: true,
   });
 
-  // CartoDB Dark Matter tiles — dark ocean, perfect colour match
+  // CartoDB Dark Matter tiles
   L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
     attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors © <a href="https://carto.com/attributions">CARTO</a>',
     subdomains:  'abcd',
     maxZoom:     19,
   }).addTo(leafletMap);
 
-  // Markers group
+  // ── Ocean name labels ────────────────────────────
+  // Permanent DivIcon labels placed at ocean centres.
+  // Show at zoom ≤ 4, fade at higher zoom via CSS class.
+  const OCEAN_NAMES = [
+    // Pacific
+    { lat:  30,  lng: -170, name: 'ТИХИЙ ОКЕАН',          sub: 'Pacific Ocean',        size: 'lg' },
+    { lat: -20,  lng: -130, name: 'ТИХИЙ ОКЕАН',          sub: '(Южный)',               size: 'sm' },
+    // Atlantic
+    { lat:  25,  lng:  -35, name: 'АТЛАНТИЧЕСКИЙ ОКЕАН',  sub: 'Atlantic Ocean',        size: 'lg' },
+    { lat: -35,  lng:  -20, name: 'АТЛАНТИЧЕСКИЙ ОКЕАН',  sub: '(Южный)',               size: 'sm' },
+    // Indian
+    { lat: -25,  lng:   75, name: 'ИНДИЙСКИЙ ОКЕАН',      sub: 'Indian Ocean',          size: 'lg' },
+    // Arctic
+    { lat:  83,  lng:    0, name: 'СЕВ. ЛЕДОВИТЫЙ ОКЕАН', sub: 'Arctic Ocean',          size: 'sm' },
+    // Southern
+    { lat: -62,  lng:    0, name: 'ЮЖНЫЙ ОКЕАН',          sub: 'Southern Ocean',        size: 'sm' },
+    // Marginal seas
+    { lat:  15,  lng:   57, name: 'АРАВИЙСКОЕ МОРЕ',      sub: '',                      size: 'xs' },
+    { lat:   5,  lng:   85, name: 'БЕНГАЛЬСКИЙ ЗАЛИВ',    sub: '',                      size: 'xs' },
+    { lat:  38,  lng:   18, name: 'СРЕДИЗЕМНОЕ МОРЕ',     sub: '',                      size: 'xs' },
+    { lat:  60,  lng:   20, name: 'БАЛТИЙСКОЕ МОРЕ',      sub: '',                      size: 'xs' },
+    { lat:  43,  lng:   34, name: 'ЧЁРНОЕ МОРЕ',          sub: '',                      size: 'xs' },
+    { lat:  29,  lng:  -90, name: 'МЕКСИКАНСКИЙ ЗАЛИВ',   sub: '',                      size: 'xs' },
+    { lat:  10,  lng: -120, name: 'КОРАЛЛОВОЕ МОРЕ',      sub: '',                      size: 'xs' },
+    { lat: -18,  lng:  153, name: 'КОРАЛЛОВОЕ МОРЕ',      sub: '',                      size: 'xs' },
+    { lat:  70,  lng:  -10, name: 'НОРВЕЖСКОЕ МОРЕ',      sub: '',                      size: 'xs' },
+  ];
+
+  const oceanLabelsLayer = L.layerGroup().addTo(leafletMap);
+
+  OCEAN_NAMES.forEach(o => {
+    const sizeMap = {
+      lg: { fs: '13px', ls: '0.18em', op: '0.72' },
+      sm: { fs: '10px', ls: '0.15em', op: '0.60' },
+      xs: { fs:  '8px', ls: '0.12em', op: '0.50' },
+    };
+    const s = sizeMap[o.size] || sizeMap.sm;
+
+    const html = `
+      <div class="ocean-label ocean-label-${o.size}">
+        <div class="ocean-label-main">${o.name}</div>
+        ${o.sub ? `<div class="ocean-label-sub">${o.sub}</div>` : ''}
+      </div>`;
+
+    const icon = L.divIcon({
+      className:  'ocean-label-wrapper',
+      html,
+      iconAnchor: [0, 0],
+    });
+
+    L.marker([o.lat, o.lng], { icon, interactive: false, keyboard: false })
+      .addTo(oceanLabelsLayer);
+  });
+
+  // Hide/show labels based on zoom level
+  leafletMap.on('zoomend', () => {
+    const z = leafletMap.getZoom();
+    const el = document.getElementById('leafletMap');
+    if (!el) return;
+    if (z >= 5) {
+      el.classList.add('labels-hidden');
+    } else {
+      el.classList.remove('labels-hidden');
+    }
+  });
+
+  // Markers group for data points
   markersLayer = L.layerGroup().addTo(leafletMap);
 
   renderMapLayer(currentMapLayer);
@@ -1443,18 +1508,34 @@ function loadAdminData() {
   try {
     const saved = localStorage.getItem('oceanwatch_admin');
     if (saved) adminData = JSON.parse(saved);
-    // Also restore MAP_LAYERS points if saved
+
+    // Restore MAP_LAYERS points from localStorage
     const savedMap = localStorage.getItem('oceanwatch_map');
     if (savedMap) {
       const mp = JSON.parse(savedMap);
-      Object.keys(mp).forEach(k => { if (MAP_LAYERS[k]) MAP_LAYERS[k].points = mp[k]; });
+      Object.keys(mp).forEach(k => {
+        if (!MAP_LAYERS[k]) return;
+        // Migrate any old canvas x/y format → lat/lng
+        MAP_LAYERS[k].points = mp[k].map(pt => {
+          if (pt.lat !== undefined) return pt; // already new format
+          // Convert old normalised x/y back to approximate lat/lng
+          return {
+            lat:      90 - pt.y * 180,
+            lng:      pt.x * 360 - 180,
+            r:        pt.r ?? 14,
+            label:    pt.label ?? '',
+            info:     pt.info  ?? '',
+            severity: pt.severity ?? 'warning',
+          };
+        });
+      });
     }
-  } catch(e) {}
+  } catch(e) { console.warn('loadAdminData failed:', e); }
 }
 
 function saveAdminData() {
   localStorage.setItem('oceanwatch_admin', JSON.stringify(adminData));
-  // Save map points separately
+  // Save all map layer points (already in lat/lng format)
   const mp = {};
   Object.keys(MAP_LAYERS).forEach(k => { mp[k] = MAP_LAYERS[k].points; });
   localStorage.setItem('oceanwatch_map', JSON.stringify(mp));
@@ -1562,6 +1643,7 @@ function renderAdmMap() {
   const container = document.getElementById('admMapPoints');
   if (!container) return;
   const pts = MAP_LAYERS[layerKey].points;
+
   container.innerHTML = pts.map((pt, i) => `
     <div class="adm-map-point">
       <div class="adm-map-point-header">
@@ -1574,26 +1656,62 @@ function renderAdmMap() {
         <button class="adm-del-btn" data-del-mp="${i}" style="margin-left:auto"><i class="fas fa-trash"></i></button>
       </div>
       <div class="adm-map-fields">
-        <div class="adm-field"><label>Название</label><input class="adm-input" data-mp-lbl="${i}" value="${pt.label.replace(/\n/g,' ')}"/></div>
-        <div class="adm-field"><label>Инфо</label><input class="adm-input" data-mp-info="${i}" value="${pt.info.replace(/\n/g,' | ')}"/></div>
-        <div class="adm-field"><label>X (0–1)</label><input class="adm-input" type="number" step="0.01" min="0" max="1" data-mp-x="${i}" value="${pt.x}"/></div>
-        <div class="adm-field"><label>Y (0–1)</label><input class="adm-input" type="number" step="0.01" min="0" max="1" data-mp-y="${i}" value="${pt.y}"/></div>
-        <div class="adm-field"><label>Размер (r)</label><input class="adm-input" type="number" min="4" max="40" data-mp-r="${i}" value="${pt.r}"/></div>
+        <div class="adm-field">
+          <label>Название</label>
+          <input class="adm-input" data-mp-lbl="${i}" value="${(pt.label||'').replace(/\n/g,' ')}"/>
+        </div>
+        <div class="adm-field">
+          <label>Описание</label>
+          <input class="adm-input" data-mp-info="${i}" value="${(pt.info||'').replace(/\n/g,' | ')}"/>
+        </div>
+        <div class="adm-field">
+          <label>Широта (lat)</label>
+          <input class="adm-input" type="number" step="0.1" min="-90" max="90"
+            data-mp-lat="${i}" value="${pt.lat ?? 0}"/>
+        </div>
+        <div class="adm-field">
+          <label>Долгота (lng)</label>
+          <input class="adm-input" type="number" step="0.1" min="-180" max="180"
+            data-mp-lng="${i}" value="${pt.lng ?? 0}"/>
+        </div>
+        <div class="adm-field">
+          <label>Размер (r)</label>
+          <input class="adm-input" type="number" min="4" max="60"
+            data-mp-r="${i}" value="${pt.r ?? 14}"/>
+        </div>
       </div>
     </div>
   `).join('');
 
-  const update = () => { renderMapLayer(currentMapLayer); };
-  container.querySelectorAll('[data-mp-lbl]').forEach(el => el.addEventListener('input', e => { pts[+e.target.dataset.mpLbl].label = e.target.value; update(); }));
-  container.querySelectorAll('[data-mp-info]').forEach(el => el.addEventListener('input', e => { pts[+e.target.dataset.mpInfo].info = e.target.value.replace(/ \| /g,'\n'); update(); }));
-  container.querySelectorAll('[data-mp-x]').forEach(el => el.addEventListener('input', e => { pts[+e.target.dataset.mpX].x = parseFloat(e.target.value)||0; update(); }));
-  container.querySelectorAll('[data-mp-y]').forEach(el => el.addEventListener('input', e => { pts[+e.target.dataset.mpY].y = parseFloat(e.target.value)||0; update(); }));
-  container.querySelectorAll('[data-mp-r]').forEach(el => el.addEventListener('input', e => { pts[+e.target.dataset.mpR].r = parseFloat(e.target.value)||10; update(); }));
-  container.querySelectorAll('[data-mp-sev]').forEach(el => el.addEventListener('change', e => { pts[+e.target.dataset.mpSev].severity = e.target.value; update(); }));
-  container.querySelectorAll('[data-del-mp]').forEach(el => el.addEventListener('click', e => {
-    pts.splice(+e.currentTarget.dataset.delMp, 1);
-    renderAdmMap(); update();
-  }));
+  // Live update helper — rerenders Leaflet markers immediately
+  const update = () => {
+    if (leafletMap) renderMapLayer(currentMapLayer);
+  };
+
+  container.querySelectorAll('[data-mp-lbl]').forEach(el =>
+    el.addEventListener('input', e => { pts[+e.target.dataset.mpLbl].label = e.target.value; update(); }));
+
+  container.querySelectorAll('[data-mp-info]').forEach(el =>
+    el.addEventListener('input', e => { pts[+e.target.dataset.mpInfo].info = e.target.value.replace(/ \| /g, '\n'); update(); }));
+
+  container.querySelectorAll('[data-mp-lat]').forEach(el =>
+    el.addEventListener('input', e => { pts[+e.target.dataset.mpLat].lat = parseFloat(e.target.value) || 0; update(); }));
+
+  container.querySelectorAll('[data-mp-lng]').forEach(el =>
+    el.addEventListener('input', e => { pts[+e.target.dataset.mpLng].lng = parseFloat(e.target.value) || 0; update(); }));
+
+  container.querySelectorAll('[data-mp-r]').forEach(el =>
+    el.addEventListener('input', e => { pts[+e.target.dataset.mpR].r = parseFloat(e.target.value) || 12; update(); }));
+
+  container.querySelectorAll('[data-mp-sev]').forEach(el =>
+    el.addEventListener('change', e => { pts[+e.target.dataset.mpSev].severity = e.target.value; update(); }));
+
+  container.querySelectorAll('[data-del-mp]').forEach(el =>
+    el.addEventListener('click', e => {
+      pts.splice(+e.currentTarget.dataset.delMp, 1);
+      renderAdmMap();
+      update();
+    }));
 }
 
 // ── Render admin Alerts tab ──────────────────────
@@ -1713,12 +1831,26 @@ function initAdmin() {
     renderAdmTicker();
   });
 
-  // Add map point
+  // Clear saved map points (reset to defaults)
+  document.getElementById('clearMapCache')?.addEventListener('click', () => {
+    localStorage.removeItem('oceanwatch_map');
+    // Reload page to restore default MAP_LAYERS
+    if (confirm('Сбросить все сохранённые точки карты к значениям по умолчанию?')) {
+      location.reload();
+    }
+  });
+
+  // Add map point — with proper lat/lng for Leaflet
   document.getElementById('addMapPoint')?.addEventListener('click', () => {
     const layerKey = document.getElementById('admMapLayer')?.value || 'plastic';
-    MAP_LAYERS[layerKey].points.push({ x: 0.5, y: 0.5, r: 12, label: 'Новая точка', info: 'Описание...', severity: 'warning' });
+    MAP_LAYERS[layerKey].points.push({
+      lat: 0, lng: 0, r: 14,
+      label: 'Новая точка',
+      info: 'Описание угрозы...',
+      severity: 'warning'
+    });
     renderAdmMap();
-    renderMapLayer(currentMapLayer);
+    if (leafletMap) renderMapLayer(currentMapLayer);
   });
 }
 

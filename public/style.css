@@ -1160,7 +1160,67 @@ main {
 
 .leaflet-control-attribution a { color: var(--accent-teal) !important; }
 
-/* Custom popup styles */
+/* ── Ocean name labels overlay ─────────────────── */
+.ocean-label-wrapper {
+  background: transparent !important;
+  border: none !important;
+  pointer-events: none;
+}
+
+.ocean-label {
+  text-align: center;
+  white-space: nowrap;
+  pointer-events: none;
+  user-select: none;
+  transform: translateX(-50%);
+}
+
+.ocean-label-main {
+  font-family: 'IBM Plex Mono', monospace;
+  font-weight: 600;
+  letter-spacing: 0.20em;
+  color: rgba(42, 157, 143, 0.75);
+  text-shadow:
+    0 0 12px rgba(42,157,143,0.5),
+    0 1px 3px rgba(0,0,0,0.8);
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.ocean-label-sub {
+  font-family: 'IBM Plex Mono', monospace;
+  font-weight: 400;
+  letter-spacing: 0.12em;
+  color: rgba(42, 157, 143, 0.45);
+  text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+  margin-top: 2px;
+  text-transform: uppercase;
+}
+
+.ocean-label-lg .ocean-label-main { font-size: 13px; }
+.ocean-label-lg .ocean-label-sub  { font-size:  9px; }
+
+.ocean-label-sm .ocean-label-main { font-size: 10px; }
+.ocean-label-sm .ocean-label-sub  { font-size:  8px; }
+
+.ocean-label-xs .ocean-label-main {
+  font-size: 8px;
+  letter-spacing: 0.14em;
+  color: rgba(42,157,143,0.50);
+}
+
+/* Fade when zoomed in past level 4 */
+#leafletMap.labels-hidden .ocean-label-wrapper {
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+#leafletMap .ocean-label-wrapper {
+  opacity: 1;
+  transition: opacity 0.3s ease;
+}
+
+/* ── Custom popup styles ─────────────────────── */
 .lf-custom-popup .leaflet-popup-content-wrapper {
   background: rgba(9,19,26,0.96);
   border: 1px solid var(--border-strong);

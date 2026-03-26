@@ -246,6 +246,21 @@
         </div>
       </div>
 
+      <!-- Live Air Quality Panel — логично здесь: загрязнение воздуха над океаном -->
+      <div class="live-data-block" style="margin-bottom:24px">
+        <div class="live-block-header">
+          <span class="live-dot-anim"></span>
+          <span>LIVE — Загрязнение воздуха над Атлантическим океаном (20°N, 40°W)</span>
+          <span class="live-source">Open-Meteo Air Quality API</span>
+        </div>
+        <div class="aq-live-grid" id="liveAqPanel">
+          <div class="aq-item skeleton"><div class="aq-label">Загрузка...</div></div>
+          <div class="aq-item skeleton"><div class="aq-label">Загрузка...</div></div>
+          <div class="aq-item skeleton"><div class="aq-label">Загрузка...</div></div>
+          <div class="aq-item skeleton"><div class="aq-label">Загрузка...</div></div>
+        </div>
+      </div>
+
       <div class="pollution-stats-grid">
         <div class="stat-card">
           <div class="stat-icon"><i class="fas fa-globe-americas"></i></div>
@@ -720,7 +735,15 @@
           <option value="temp">🌡️ Температурные аномалии</option>
           <option value="coral">🪸 Состояние рифов</option>
         </select>
+        <button class="adm-add-btn" id="clearMapCache" style="margin-left:auto;border-color:rgba(230,57,70,0.3);color:var(--critical)">
+          <i class="fas fa-trash-alt"></i> Сбросить сохранённые точки
+        </button>
       </div>
+      <p class="adm-pane-desc" style="margin-bottom:8px">
+        Координаты: <strong style="color:var(--accent-teal)">Широта</strong> от −90 (юг) до 90 (север) · 
+        <strong style="color:var(--accent-teal)">Долгота</strong> от −180 (запад) до 180 (восток). 
+        Изменения отображаются на карте мгновенно.
+      </p>
       <div class="adm-map-points" id="admMapPoints">
         <!-- Populated by JS -->
       </div>
