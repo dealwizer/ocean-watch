@@ -1456,16 +1456,112 @@ function initOceanMap() {
 
 
 /* ══════════════════════════════════════════════════
-   12. SIMULATE LIVE DATA UPDATES
+   12. CONNECTIVITY MONITOR + LIVE UPDATES
    ══════════════════════════════════════════════════ */
+
+// ── Network status manager ───────────────────────
+const NetStatus = {
+  isOnline: navigator.onLine,
+  lastCheck: null,
+
+  // Update all UI indicators
+  update(online, reason = '') {
+    this.isOnline = online;
+    this.lastCheck = new Date();
+
+    const dot      = document.getElementById('statusDot');
+    const text     = document.getElementById('statusText');
+    const tooltip  = document.getElementById('offlineTooltip');
+    const indicator= document.getElementById('statusIndicator');
+    const apiBar   = document.getElementById('apiStatusBar');
+    const ticker   = document.querySelector('.data-ticker');
+
+    if (online) {
+      // ── ONLINE state ────────────────────────────
+      dot?.classList.remove('offline');
+      dot?.classList.add('online');
+      if (text) text.textContent = 'Live Data';
+      indicator?.classList.remove('is-offline');
+      tooltip?.classList.remove('visible');
+      apiBar?.classList.remove('offline-bar');
+      ticker?.classList.remove('ticker-offline');
+    } else {
+      // ── OFFLINE state ───────────────────────────
+      dot?.classList.remove('online');
+      dot?.classList.add('offline');
+      if (text) text.textContent = 'Нет связи';
+      indicator?.classList.add('is-offline');
+      tooltip?.classList.add('visible');
+      apiBar?.classList.add('offline-bar');
+      ticker?.classList.add('ticker-offline');
+
+      // Update API bar message
+      if (apiBar) {
+        let offlineMsg = apiBar.querySelector('.offline-api-msg');
+        if (!offlineMsg) {
+          offlineMsg = document.createElement('div');
+          offlineMsg.className = 'api-status-item offline-api-msg';
+          offlineMsg.innerHTML = `<span class="api-dot err"></span>Нет подключения — данные API недоступны`;
+          apiBar.prepend(offlineMsg);
+        }
+      }
+
+      console.warn('OceanWatch: offline —', reason);
+    }
+  },
+
+  // Active probe — fetch tiny resource to confirm real connectivity
+  async probe() {
+    try {
+      const res = await fetch('https://api.open-meteo.com/v1/forecast?latitude=0&longitude=0&current=temperature_2m', {
+        method: 'HEAD',
+        cache: 'no-store',
+        signal: AbortSignal.timeout(5000),
+      });
+      return res.ok || res.status < 500;
+    } catch {
+      return false;
+    }
+  },
+
+  // Start monitoring
+  init() {
+    // Immediate state from browser
+    this.update(navigator.onLine, 'navigator.onLine');
+
+    // Browser online/offline events (fast, but unreliable on mobile)
+    window.addEventListener('online',  () => {
+      this.update(true);
+      // Re-fetch API data when connection restored
+      fetchAllLiveData();
+    });
+
+    window.addEventListener('offline', () => {
+      this.update(false, 'offline event');
+    });
+
+    // Active probe every 30 seconds (catches cases where browser
+    // thinks it's online but actually has no real connectivity)
+    setInterval(async () => {
+      const alive = await this.probe();
+      if (alive !== this.isOnline) this.update(alive, 'active probe');
+    }, 30_000);
+  },
+};
+
 function initLiveUpdates() {
+  // Start connectivity monitor
+  NetStatus.init();
+
+  // Pulse dot heartbeat animation (only when online)
   setInterval(() => {
-    const dot = document.querySelector('.pulse-dot');
+    if (!NetStatus.isOnline) return;
+    const dot = document.getElementById('statusDot');
     if (dot) {
       dot.style.background = '#e9c46a';
-      setTimeout(() => { dot.style.background = '#4caf7d'; }, 300);
+      setTimeout(() => { dot.style.background = ''; }, 300);
     }
-  }, 10000);
+  }, 10_000);
 }
 
 /* ══════════════════════════════════════════════════

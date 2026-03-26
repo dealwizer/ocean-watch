@@ -186,8 +186,23 @@ a:hover { color: var(--accent-gold); }
   width: 8px; height: 8px;
   border-radius: 50%;
   background: var(--safe);
+  flex-shrink: 0;
+  transition: background 0.3s;
+}
+
+/* Online — pulsing green */
+.pulse-dot.online,
+.pulse-dot:not(.offline) {
+  background: var(--safe);
   box-shadow: 0 0 0 0 rgba(76,175,125,0.4);
   animation: pulse 2s infinite;
+}
+
+/* Offline — solid red, no pulse, flashing */
+.pulse-dot.offline {
+  background: var(--critical);
+  box-shadow: 0 0 6px rgba(230,57,70,0.7);
+  animation: offlineBlink 1.2s ease-in-out infinite;
 }
 
 @keyframes pulse {
@@ -196,12 +211,106 @@ a:hover { color: var(--accent-gold); }
   100% { box-shadow: 0 0 0 0 rgba(76,175,125,0); }
 }
 
+@keyframes offlineBlink {
+  0%, 100% { opacity: 1;   box-shadow: 0 0 8px rgba(230,57,70,0.8); }
+  50%       { opacity: 0.4; box-shadow: 0 0 2px rgba(230,57,70,0.3); }
+}
+
 .status-text {
   font-family: var(--font-mono);
   font-size: 0.72rem;
   color: var(--safe);
   letter-spacing: 0.1em;
+  transition: color 0.3s;
 }
+
+/* Offline state changes text colour */
+.status-indicator.is-offline .status-text {
+  color: var(--critical);
+}
+
+/* ── Offline tooltip ─────────────────────────────── */
+.status-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  position: relative;
+  cursor: default;
+}
+
+.offline-tooltip {
+  display: none;
+  position: absolute;
+  top: calc(100% + 10px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(9,19,26,0.97);
+  border: 1px solid rgba(230,57,70,0.45);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  white-space: nowrap;
+  z-index: 500;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.6), 0 0 0 1px rgba(230,57,70,0.15);
+  gap: 10px;
+  align-items: flex-start;
+  animation: tooltipIn 0.2s ease;
+  pointer-events: none;
+}
+
+.offline-tooltip.visible {
+  display: flex;
+}
+
+.offline-tooltip::before {
+  content: '';
+  position: absolute;
+  top: -5px; left: 50%;
+  transform: translateX(-50%) rotate(45deg);
+  width: 8px; height: 8px;
+  background: rgba(9,19,26,0.97);
+  border-left: 1px solid rgba(230,57,70,0.45);
+  border-top:  1px solid rgba(230,57,70,0.45);
+}
+
+.offline-tooltip i {
+  color: var(--critical);
+  font-size: 1rem;
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.offline-tooltip strong {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--text-primary);
+  font-weight: 600;
+  margin-bottom: 3px;
+}
+
+.offline-tooltip span {
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+}
+
+@keyframes tooltipIn {
+  from { opacity: 0; transform: translateX(-50%) translateY(-4px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+/* ── Offline API bar ────────────────────────────── */
+.api-status-bar.offline-bar {
+  border-bottom-color: rgba(230,57,70,0.3);
+  background: rgba(230,57,70,0.05);
+}
+
+/* ── Offline ticker tint ───────────────────────── */
+.data-ticker.ticker-offline {
+  border-bottom-color: rgba(230,57,70,0.25);
+  background: rgba(13,29,39,0.98);
+}
+
+
 
 .btn-refresh {
   background: rgba(42,157,143,0.12);

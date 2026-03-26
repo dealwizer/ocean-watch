@@ -40,9 +40,16 @@
         <a href="#map" class="nav-link" data-section="map">Карта</a>
       </nav>
       <div class="header-controls">
-        <div class="status-indicator">
-          <span class="pulse-dot"></span>
-          <span class="status-text">Live Data</span>
+        <div class="status-indicator" id="statusIndicator" title="Статус подключения">
+          <span class="pulse-dot" id="statusDot"></span>
+          <span class="status-text" id="statusText">Live Data</span>
+          <div class="offline-tooltip" id="offlineTooltip">
+            <i class="fas fa-wifi-slash"></i>
+            <div>
+              <strong>Нет подключения к интернету</strong>
+              <span>Отображаются статичные данные</span>
+            </div>
+          </div>
         </div>
         <button class="btn-admin" id="adminBtn" title="Панель администратора">
           <i class="fas fa-lock"></i> Войти
@@ -245,6 +252,8 @@
           <div class="aq-item skeleton"><div class="aq-label">Загрузка УФ...</div></div>
         </div>
       </div>
+
+
 
       <div class="pollution-stats-grid">
         <div class="stat-card">
